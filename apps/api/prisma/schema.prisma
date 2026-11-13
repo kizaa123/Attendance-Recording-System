@@ -1,0 +1,471 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum ScopeType {
+  university
+  faculty
+  department
+  programme
+  offering
+}
+
+enum OfferingStatus {
+  draft
+  open
+  closed
+  archived
+}
+
+enum EnrolmentStatus {
+  active
+  dropped
+  completed
+}
+
+enum LectureSessionStatus {
+  scheduled
+  open
+  closed
+  finalized
+  cancelled
+}
+
+enum AttendanceStatus {
+  present
+  late
+  absent
+  excused
+  pending_verification
+}
+
+enum QrCredentialStatus {
+  active
+  revoked
+}
+
+enum CorrectionStatus {
+  pending
+  approved
+  rejected
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  status       UserStatus @default(active)
+  studentId    String?    @unique @map("student_id") @db.Uuid
+  lecturerId   String?    @unique @map("lecturer_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  student  Student?  @relation(fields: [studentId], references: [id])
+  lecturer Lecturer? @relation(fields: [lecturerId], references: [id])
+
+  refreshTokens RefreshToken[]
+  userRoles     UserRole[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Role {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id       String @id @default(uuid()) @db.Uuid
+  code     String @unique
+  resource String
+  action   String
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        String     @id @default(uuid()) @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  roleId    String     @map("role_id") @db.Uuid
+  scopeType ScopeType? @map("scope_type")
+  scopeId   String?    @map("scope_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, scopeType, scopeId])
+  @@map("user_roles")
+}
+
+model University {
+  id   String @id @default(uuid()) @db.Uuid
+  name String
+  code String @unique
+
+  faculties     Faculty[]
+  students      Student[]
+  lecturers     Lecturer[]
+  academicYears AcademicYear[]
+
+  @@map("universities")
+}
+
+model Faculty {
+  id           String @id @default(uuid()) @db.Uuid
+  universityId String @map("university_id") @db.Uuid
+  name         String
+  code         String
+
+  university University  @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  departments Department[]
+
+  @@unique([universityId, code])
+  @@map("faculties")
+}
+
+model Department {
+  id        String @id @default(uuid()) @db.Uuid
+  facultyId String @map("faculty_id") @db.Uuid
+  name      String
+  code      String
+
+  faculty    Faculty     @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  programmes Programme[]
+  courses    Course[]
+  lecturers  Lecturer[]
+
+  @@unique([facultyId, code])
+  @@map("departments")
+}
+
+model Programme {
+  id           String @id @default(uuid()) @db.Uuid
+  departmentId String @map("department_id") @db.Uuid
+  name         String
+  code         String
+  degreeLevel  String @map("degree_level")
+
+  department      Department       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  courseOfferings CourseOffering[]
+
+  @@unique([departmentId, code])
+  @@map("programmes")
+}
+
+model AcademicYear {
+  id           String   @id @default(uuid()) @db.Uuid
+  universityId String   @map("university_id") @db.Uuid
+  label        String
+  startDate    DateTime @map("start_date") @db.Date
+  endDate      DateTime @map("end_date") @db.Date
+  isCurrent    Boolean  @default(false) @map("is_current")
+
+  university University @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  semesters  Semester[]
+
+  @@map("academic_years")
+}
+
+model Semester {
+  id             String   @id @default(uuid()) @db.Uuid
+  academicYearId String   @map("academic_year_id") @db.Uuid
+  name           String
+  sequence       Int
+  startDate      DateTime @map("start_date") @db.Date
+  endDate        DateTime @map("end_date") @db.Date
+  totalWeeks     Int      @map("total_weeks")
+  isCurrent      Boolean  @default(false) @map("is_current")
+
+  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  courseOfferings CourseOffering[]
+  lectureSessions LectureSession[]
+
+  @@unique([academicYearId, sequence])
+  @@map("semesters")
+}
+
+model Course {
+  id           String  @id @default(uuid()) @db.Uuid
+  departmentId String  @map("department_id") @db.Uuid
+  catalogueCode String @unique @map("catalogue_code")
+  title        String
+  description  String?
+  creditHours  Int     @map("credit_hours")
+
+  department      Department       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  courseOfferings CourseOffering[]
+
+  @@map("courses")
+}
+
+model CourseOffering {
+  id          String         @id @default(uuid()) @db.Uuid
+  courseId    String         @map("course_id") @db.Uuid
+  programmeId String         @map("programme_id") @db.Uuid
+  semesterId  String         @map("semester_id") @db.Uuid
+  level       Int
+  cohortLabel String?        @map("cohort_label")
+  sectionCode String         @map("section_code")
+  status      OfferingStatus @default(draft)
+
+  course    Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  programme Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  semester  Semester  @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+
+  enrolments             Enrolment[]
+  lecturerAssignments    LecturerAssignment[]
+  sessionOfferings       SessionOffering[]
+  attendanceAttributions AttendanceAttribution[]
+
+  @@unique([courseId, programmeId, semesterId, sectionCode])
+  @@map("course_offerings")
+}
+
+model Student {
+  id              String @id @default(uuid()) @db.Uuid
+  universityId    String @map("university_id") @db.Uuid
+  indexNumber     String @unique @map("index_number")
+  legalName       String @map("legal_name")
+  email           String?
+  phone           String?
+  photoObjectKey  String? @map("photo_object_key")
+  accountStatus   String  @default("active") @map("account_status")
+
+  university University @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  user       User?
+
+  enrolments       Enrolment[]
+  qrCredential     QrCredential?
+  qrHistory        QrCredentialHistory[]
+  attendanceRecords AttendanceRecord[]
+
+  @@map("students")
+}
+
+model Lecturer {
+  id           String @id @default(uuid()) @db.Uuid
+  universityId String @map("university_id") @db.Uuid
+  staffId      String @unique @map("staff_id")
+  name         String
+  email        String?
+  departmentId String? @map("department_id") @db.Uuid
+
+  university University  @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id])
+  user       User?
+
+  lecturerAssignments LecturerAssignment[]
+  sessionLecturers    SessionLecturer[]
+
+  @@map("lecturers")
+}
+
+model Enrolment {
+  id               String          @id @default(uuid()) @db.Uuid
+  studentId        String          @map("student_id") @db.Uuid
+  courseOfferingId String          @map("course_offering_id") @db.Uuid
+  status           EnrolmentStatus @default(active)
+  enrolledAt       DateTime        @default(now()) @map("enrolled_at")
+
+  student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseOffering CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseOfferingId])
+  @@map("enrolments")
+}
+
+model LecturerAssignment {
+  id               String @id @default(uuid()) @db.Uuid
+  lecturerId       String @map("lecturer_id") @db.Uuid
+  courseOfferingId String @map("course_offering_id") @db.Uuid
+  role             String @default("primary")
+
+  lecturer       Lecturer       @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  courseOffering CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+
+  @@unique([lecturerId, courseOfferingId])
+  @@map("lecturer_assignments")
+}
+
+model LectureSession {
+  id              String               @id @default(uuid()) @db.Uuid
+  title           String
+  semesterId      String               @map("semester_id") @db.Uuid
+  scheduledStart  DateTime             @map("scheduled_start")
+  scheduledEnd    DateTime             @map("scheduled_end")
+  venue           String?
+  status          LectureSessionStatus @default(scheduled)
+  openedAt        DateTime?            @map("opened_at")
+  closedAt        DateTime?            @map("closed_at")
+  finalizedAt     DateTime?            @map("finalized_at")
+  createdByUserId String?              @map("created_by_user_id") @db.Uuid
+
+  semester            Semester             @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  sessionOfferings    SessionOffering[]
+  sessionLecturers    SessionLecturer[]
+  attendanceRecords   AttendanceRecord[]
+
+  @@map("lecture_sessions")
+}
+
+model SessionOffering {
+  lectureSessionId String @map("lecture_session_id") @db.Uuid
+  courseOfferingId String @map("course_offering_id") @db.Uuid
+
+  lectureSession LectureSession @relation(fields: [lectureSessionId], references: [id], onDelete: Cascade)
+  courseOffering CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+
+  @@id([lectureSessionId, courseOfferingId])
+  @@map("session_offerings")
+}
+
+model SessionLecturer {
+  lectureSessionId String @map("lecture_session_id") @db.Uuid
+  lecturerId       String @map("lecturer_id") @db.Uuid
+  role             String @default("lead")
+
+  lectureSession LectureSession @relation(fields: [lectureSessionId], references: [id], onDelete: Cascade)
+  lecturer       Lecturer       @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+
+  @@id([lectureSessionId, lecturerId])
+  @@map("session_lecturers")
+}
+
+model QrCredential {
+  id            String             @id @default(uuid()) @db.Uuid
+  studentId     String             @unique @map("student_id") @db.Uuid
+  publicTokenId String             @unique @map("public_token_id") @db.Uuid
+  secretHash    String             @map("secret_hash")
+  status        QrCredentialStatus @default(active)
+  issuedAt      DateTime           @default(now()) @map("issued_at")
+  revokedAt     DateTime?          @map("revoked_at")
+  revokedReason String?            @map("revoked_reason")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("qr_credentials")
+}
+
+model QrCredentialHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  studentId  String   @map("student_id") @db.Uuid
+  secretHash String   @map("secret_hash")
+  status     String
+  rotatedAt  DateTime @default(now()) @map("rotated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("qr_credential_history")
+}
+
+model AttendanceRecord {
+  id               String           @id @default(uuid()) @db.Uuid
+  lectureSessionId String           @map("lecture_session_id") @db.Uuid
+  studentId        String           @map("student_id") @db.Uuid
+  status           AttendanceStatus @default(present)
+  scannedAt        DateTime         @default(now()) @map("scanned_at")
+  recordedByUserId String?          @map("recorded_by_user_id") @db.Uuid
+  scanMethod       String           @default("qr") @map("scan_method")
+
+  lectureSession LectureSession          @relation(fields: [lectureSessionId], references: [id], onDelete: Cascade)
+  student        Student                 @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attributions   AttendanceAttribution[]
+  corrections    AttendanceCorrection[]
+
+  @@unique([studentId, lectureSessionId])
+  @@map("attendance_records")
+}
+
+model AttendanceAttribution {
+  id                 String @id @default(uuid()) @db.Uuid
+  attendanceRecordId String @map("attendance_record_id") @db.Uuid
+  courseOfferingId   String @map("course_offering_id") @db.Uuid
+  attributionStatus  String @default("credited") @map("attribution_status")
+
+  attendanceRecord AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+  courseOffering   CourseOffering   @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+
+  @@unique([attendanceRecordId, courseOfferingId])
+  @@map("attendance_attributions")
+}
+
+model AttendanceCorrection {
+  id                 String           @id @default(uuid()) @db.Uuid
+  attendanceRecordId String           @map("attendance_record_id") @db.Uuid
+  requestedByUserId  String           @map("requested_by_user_id") @db.Uuid
+  reviewedByUserId   String?          @map("reviewed_by_user_id") @db.Uuid
+  previousStatus     AttendanceStatus @map("previous_status")
+  newStatus          AttendanceStatus @map("new_status")
+  reason             String
+  status             CorrectionStatus @default(pending)
+
+  attendanceRecord AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+
+  @@map("attendance_corrections")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String?  @map("entity_id")
+  metadata    Json?
+  ip          String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  key   String @id
+  value Json
+
+  @@map("system_settings")
+}

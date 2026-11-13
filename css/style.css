@@ -1,0 +1,106 @@
+body {
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+.avatar-slot .avatar-spinner,
+.avatar-spinner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: -0.5625rem 0 0 -0.5625rem;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: #0d9488;
+  border-radius: 9999px;
+  animation: avatar-spin 0.7s linear infinite;
+  z-index: 2;
+}
+
+.avatar-slot[data-avatar-state="loaded"] [data-avatar-initials] {
+  opacity: 0;
+}
+
+.avatar-slot[data-avatar-state="loaded"] [data-avatar-img] {
+  opacity: 1;
+}
+
+@keyframes avatar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes laserPulse {
+  0% { top: 15%; opacity: 0.8; }
+  50% { top: 80%; opacity: 1; }
+  100% { top: 15%; opacity: 0.8; }
+}
+
+.rounded-xs {
+  border-radius: 2px;
+}
+
+.laser-line {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  width: auto;
+  animation: laserPulse 2.4s ease-in-out infinite;
+}
+
+.scan-camera-shell {
+  position: relative;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  background: #0f172a;
+  min-height: 220px;
+}
+
+.scan-camera-shell #qr-reader,
+.scan-camera-shell #qr-reader video,
+.scan-camera-shell #ta-qr-reader,
+.scan-camera-shell #ta-qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border: none !important;
+}
+
+.scan-camera-shell #qr-reader img,
+.scan-camera-shell #ta-qr-reader img {
+  display: none !important;
+}
+
+.scan-corner {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-color: rgba(45, 212, 191, 0.9);
+  border-style: solid;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.scan-corner-tl { top: 10%; left: 8%; border-width: 3.5px 0 0 3.5px; border-radius: 6px 0 0 0; }
+.scan-corner-tr { top: 10%; right: 8%; border-width: 3.5px 3.5px 0 0; border-radius: 0 6px 0 0; }
+.scan-corner-bl { bottom: 12%; left: 8%; border-width: 0 0 3.5px 3.5px; border-radius: 0 0 0 6px; }
+.scan-corner-br { bottom: 12%; right: 8%; border-width: 0 3.5px 3.5px 0; border-radius: 0 0 6px 0; }
+
+.scan-camera-label {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  background: rgba(15, 23, 42, 0.75);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

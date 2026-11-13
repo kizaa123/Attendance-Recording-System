@@ -1,0 +1,7 @@
+node_modules/
+.env
+apps/api/.env
+data/attendify.db
+data/attendify.db-wal
+data/attendify.db-shm
+.attendify-stop

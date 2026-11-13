@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendify - Class Registration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/tailwind-dashboard.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="min-h-full bg-[#f8fafc] text-slate-800 antialiased">
+  <main class="max-w-lg mx-auto px-4 py-10">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-500 to-tealAccent-500 flex items-center justify-center text-white">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+      </div>
+      <div>
+        <p class="text-xs font-bold tracking-wider uppercase text-tealAccent-700">Attendify</p>
+        <h1 class="text-xl font-black text-brand-900">Programme registration</h1>
+      </div>
+    </div>
+
+    <section id="enroll-card" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <p class="text-sm text-slate-500">You are registering on programme <strong id="enroll-course" class="text-slate-800"></strong>. Your details appear on the programme roster and count for course attendance.</p>
+
+      <form id="enroll-form" class="mt-5 space-y-4">
+        <div id="ucc-photo-preview" class="hidden flex flex-col items-center pb-2">
+          <div class="avatar-slot relative w-32 h-32 rounded-full bg-brand-50 ring-4 ring-white shadow-lg border border-slate-100 overflow-hidden">
+            <span id="ucc-photo-spinner" class="avatar-spinner hidden" aria-hidden="true"></span>
+            <img id="ucc-photo-img" alt="" class="hidden absolute inset-0 w-full h-full rounded-full object-cover" referrerpolicy="no-referrer">
+          </div>
+          <p id="ucc-photo-status" class="text-xs text-slate-500 mt-3 text-center max-w-xs"></p>
+        </div>
+        <label class="block text-xs font-semibold text-slate-600">Index number
+          <input id="index" required placeholder="e.g. PS/ITC/24/0254" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
+        </label>
+        <label class="block text-xs font-semibold text-slate-600">Full name
+          <input id="name" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
+        </label>
+        <label class="block text-xs font-semibold text-slate-600">Email
+          <input id="email" type="email" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
+        </label>
+        <p class="text-[11px] text-slate-500 leading-relaxed">Your official UCC profile photo is loaded automatically from your index number (no file upload).</p>
+        <p id="enroll-error" class="text-xs font-semibold text-rose-600"></p>
+        <button class="w-full rounded-xl bg-brand-900 text-white text-sm font-bold py-2.5 hover:bg-brand-800">Submit and get my QR card</button>
+      </form>
+
+      <div id="enroll-success" class="hidden mt-2 text-center">
+        <p class="text-sm text-slate-600">You are registered, <strong id="success-name"></strong>.</p>
+        <p class="text-xs font-mono text-slate-500 mt-1" id="success-index"></p>
+        <div id="success-qr" class="mx-auto mt-4 flex justify-center"></div>
+        <p class="text-xs text-slate-500 mt-3">Save this card. Show it to the lecturer camera when attendance starts.</p>
+        <a id="success-download" class="inline-flex mt-4 px-4 py-2 rounded-xl bg-tealAccent-600 text-white text-xs font-bold">Download QR card</a>
+      </div>
+    </section>
+  </main>
+  <script src="js/qrcode.min.js"></script>
+  <script src="js/store.js?v=18"></script>
+  <script src="js/enroll.js?v=4"></script>
+</body>
+</html>

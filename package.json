@@ -1,0 +1,32 @@
+{
+  "name": "attendify",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "node server.js",
+    "serve": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/attendify-serve.ps1",
+    "serve:bg": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/attendify-start-background.ps1",
+    "serve:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/attendify-stop.ps1",
+    "api:dev": "npm run dev -w @attendify/api",
+    "api:build": "npm run build -w @attendify/api",
+    "db:setup": "powershell -ExecutionPolicy Bypass -File ./scripts/setup-local-postgres.ps1",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:migrate": "npm run prisma:migrate -w @attendify/api --",
+    "db:seed": "npm run prisma:seed -w @attendify/api",
+    "db:generate": "npm run prisma:generate -w @attendify/api"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "prisma@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "argon2@0.41.1": true,
+    "esbuild@0.28.2": true
+  },
+  "devDependencies": {
+    "selfsigned": "^5.5.0"
+  }
+}

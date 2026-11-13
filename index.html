@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0;url=dashboard.html">
+  <title>Attendify</title>
+  <script>
+    (function () {
+      var q = window.location.search || "";
+      var params = new URLSearchParams(q);
+      var programme = params.get("programme") || params.get("class");
+      if (programme) {
+        window.location.replace("programme.html?programme=" + encodeURIComponent(programme));
+        return;
+      }
+      window.location.replace("dashboard.html");
+    })();
+  </script>
+</head>
+<body>
+  <p><a href="dashboard.html">Go to dashboard</a></p>
+</body>
+</html>

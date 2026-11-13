@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Attendify — TA Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/tailwind-dashboard.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { font-family: "Plus Jakarta Sans", sans-serif; }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+      vertical-align: middle;
+    }
+
+    /* Pulse ring on verified */
+    @keyframes ringPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(20,184,166,.45); }
+      70%  { box-shadow: 0 0 0 12px rgba(20,184,166,0); }
+      100% { box-shadow: 0 0 0 0 rgba(20,184,166,0); }
+    }
+    .ring-pulse { animation: ringPulse 0.7s ease-out; }
+
+    /* slide-down for verified banner */
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .slide-down { animation: slideDown 0.25s ease-out; }
+
+    /* safe-area padding for notched phones */
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 12px); }
+  </style>
+</head>
+<body class="h-full bg-slate-100 overflow-hidden flex flex-col select-none">
+
+  <!-- ═══════════════════════════════════════════════
+       ERROR SCREEN (shown when token invalid/expired)
+  ════════════════════════════════════════════════ -->
+  <div id="errorScreen" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900 text-white px-6 text-center">
+    <div class="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center mb-4">
+      <svg class="w-8 h-8 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+    </div>
+    <h2 class="text-xl font-black text-white">Link expired</h2>
+    <p id="errorMsg" class="text-slate-400 text-sm mt-2">This TA access link has expired or the session has ended.</p>
+    <p class="text-slate-500 text-xs mt-4">Ask the lecturer to generate a new share link.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       LOADING SCREEN
+  ════════════════════════════════════════════════ -->
+  <div id="loadingScreen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900">
+    <div class="w-10 h-10 rounded-full border-2 border-teal-500/30 border-t-teal-400 animate-spin mb-4"></div>
+    <p class="text-slate-400 text-sm font-semibold">Loading scanner…</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       MAIN SCANNER UI
+  ════════════════════════════════════════════════ -->
+  <div id="mainUI" class="hidden flex flex-col h-full overflow-hidden">
+
+    <!-- ── Top bar ── -->
+    <header class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shrink-0">
+      <div class="min-w-0">
+        <p id="hdr-lecture" class="font-black text-sm text-white truncate leading-tight"></p>
+        <p id="hdr-programme" class="text-[11px] text-teal-400 font-semibold truncate"></p>
+      </div>
+      <div class="text-right shrink-0 ml-3">
+        <p class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">TA Mode</p>
+        <p id="hdr-week" class="text-xs text-slate-300 font-mono font-semibold"></p>
+      </div>
+    </header>
+
+    <!-- ── Camera shell ── -->
+    <div class="scan-camera-shell shrink-0 relative mx-3 mt-3 rounded-2xl overflow-hidden shadow-inner" style="height: 285px; min-height: 260px;">
+      <p class="scan-camera-label">Lecturer Camera: Scan student QR pass</p>
+      <span class="scan-corner scan-corner-tl"></span>
+      <span class="scan-corner scan-corner-tr"></span>
+      <span class="scan-corner scan-corner-bl"></span>
+      <span class="scan-corner scan-corner-br"></span>
+      <div id="ta-qr-reader" class="w-full h-full"></div>
+
+      <!-- Camera prompt / permission fallback overlay -->
+      <div id="ta-camera-prompt" class="hidden absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-900/90 p-4 text-center">
+        <div class="w-12 h-12 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center mb-2">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </div>
+        <p id="ta-camera-msg" class="text-xs text-slate-200 font-semibold mb-2.5 max-w-xs leading-relaxed">Tap to activate camera</p>
+        <div class="flex gap-2">
+          <button type="button" id="btn-retry-camera" class="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow">
+            Start Camera
+          </button>
+          <button type="button" id="btn-prompt-manual" class="px-3.5 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold">
+            Use Manual
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Verified banner ── -->
+    <div id="ta-verified-box" class="hidden px-3 mt-3"></div>
+
+    <!-- ── Recent scans list (scrollable) ── -->
+    <div class="flex-1 min-h-0 overflow-y-auto px-3 mt-3">
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-xs font-bold text-slate-800 flex items-center gap-1">
+          <span class="material-symbols-outlined text-base text-slate-500">history</span> Recent Scans
+        </p>
+        <span id="ta-recent-subtitle" class="text-[11px] text-slate-500 font-semibold"></span>
+      </div>
+      <div id="ta-recent-list" class="space-y-2 pb-4"></div>
+    </div>
+
+    <!-- ── Bottom action bar (simple: Use manual & Save session) ── -->
+    <div class="shrink-0 safe-bottom bg-white border-t border-slate-200 px-4 pt-3 pb-3">
+      <div class="grid grid-cols-2 gap-3">
+        <button type="button" id="btn-ta-manual"
+          class="flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-sm font-bold border border-slate-200 transition">
+          <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          Use manual
+        </button>
+        <button type="button" id="btn-ta-save"
+          class="flex items-center justify-center gap-2 py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-bold shadow transition">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Save session
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       MANUAL ATTENDANCE MODAL / SHEET
+  ════════════════════════════════════════════════ -->
+  <div id="manualModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4">
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden">
+      <!-- Header -->
+      <div class="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <div>
+          <h3 class="text-base font-black text-slate-900">Manual Attendance</h3>
+          <p class="text-xs text-slate-500">Tap a student or enter an index number</p>
+        </div>
+        <button type="button" id="manual-modal-close" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center">×</button>
+      </div>
+      
+      <!-- Quick Index Entry / Search -->
+      <div class="p-3 bg-slate-50 border-b border-slate-100 shrink-0 space-y-2">
+        <form id="manual-index-form" class="flex gap-2">
+          <input id="manual-index-input" type="text" placeholder="Type Index Number (e.g. CS2024-0012)..." class="flex-1 px-3 py-2 text-xs font-mono border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none" autocomplete="off" />
+          <button type="submit" class="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shrink-0 shadow">Mark</button>
+        </form>
+        <input id="manual-search-filter" type="text" placeholder="Filter roster below by name or index..." class="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-teal-500" />
+        <p id="manual-error" class="hidden text-xs text-rose-600 font-semibold px-1"></p>
+      </div>
+
+      <!-- Student Roster List -->
+      <div class="flex-1 overflow-y-auto p-3 space-y-2" id="manual-roster-list">
+        <p class="text-xs text-slate-400 text-center py-6">Loading programme roster…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SESSION SAVED / ENDED SCREEN
+  ════════════════════════════════════════════════ -->
+  <div id="savedScreen" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center bg-teal-700 text-white px-6 text-center">
+    <div class="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mb-5">
+      <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+      </svg>
+    </div>
+    <h2 class="text-2xl font-black">Session saved!</h2>
+    <p id="saved-count" class="text-teal-200 text-sm mt-2"></p>
+    <p class="text-teal-300 text-xs mt-4">The lecturer has been notified. You can close this tab.</p>
+  </div>
+
+  <script src="js/html5-qrcode.min.js"></script>
+  <script>
+    if (typeof Html5Qrcode === "undefined") {
+      document.write('<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"><\/script>');
+    }
+  </script>
+  <script src="js/store.js?v=18"></script>
+  <script>
+  (function () {
+    "use strict";
+
+    // ─── State ────────────────────────────────────────────────────────────────
+    var taToken = "";
+    var sessionCtx = null;   // { sessionId, classId, lectureName, weekNumber, courseId, programme }
+    var apiBase = "";
+    var scanner = null;
+    var cameraFacing = "environment";
+    var lastCode = "";
+    var lastScanAt = 0;
+    var scannedStudents = [];  // local scan log for this TA session
+    var programmeStudents = []; // full class roster for manual marking
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+    function esc(v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+
+    function fmt(iso) {
+      return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+
+    function initials(name) {
+      var parts = String(name || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
+      return parts.length ? parts.map(function (p) { return p[0].toUpperCase(); }).join("") : "ST";
+    }
+
+    var UCC_PHOTO_CDN = "https://cdn.ucc.edu.gh/photos/?tag=";
+
+    function uccPhotoUrl(indexNumber) {
+      var tag = String(indexNumber || "").trim();
+      if (!tag) return "";
+      return UCC_PHOTO_CDN + encodeURIComponent(tag).replace(/%2F/gi, "/");
+    }
+
+    function studentPhoto(s) {
+      if (!s) return "";
+      if (s.photo && String(s.photo).trim()) return String(s.photo).trim();
+      var idx = s.index || s.studentIndex;
+      return uccPhotoUrl(idx);
+    }
+
+    function renderAvatar(s, sizeClass, extraClass) {
+      var name = typeof s === "string" ? s : (s && s.name) || "";
+      var photo = typeof s === "object" ? studentPhoto(s) : "";
+      var ini = initials(name);
+      var size = sizeClass || "w-11 h-11";
+      var extra = extraClass || "";
+      var colors = ["bg-teal-100 text-teal-800", "bg-brand-100 text-brand-800", "bg-amber-100 text-amber-800", "bg-violet-100 text-violet-800"];
+      var color = colors[ini.charCodeAt(0) % colors.length];
+
+      if (photo) {
+        return (
+          '<div class="' + size + ' rounded-full overflow-hidden shrink-0 relative bg-slate-200 select-none shadow-sm ' + extra + '">' +
+            '<img src="' + esc(photo) + '" alt="' + esc(name) + '" class="w-full h-full object-cover" onerror="this.style.display=\'none\'; if(this.nextElementSibling) this.nextElementSibling.style.display=\'flex\';" />' +
+            '<span class="hidden absolute inset-0 items-center justify-center ' + color + ' font-bold text-sm">' + esc(ini) + '</span>' +
+          '</div>'
+        );
+      }
+
+      return (
+        '<span class="' + size + ' rounded-full ' + color + ' font-bold text-sm inline-flex items-center justify-center shrink-0 select-none shadow-sm ' + extra + '">' +
+          esc(ini) +
+        '</span>'
+      );
+    }
+
+    function avatarBubble(name, sizeClass) {
+      return renderAvatar(name, sizeClass);
+    }
+
+    function apiUrl(path) {
+      if (apiBase) return apiBase.replace(/\/$/, "") + path;
+      if (window.location.protocol === "file:") return "http://localhost:3000" + path;
+      return path;
+    }
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    var params = new URLSearchParams(window.location.search);
+    taToken = params.get("token") || "";
+
+    if (!taToken) {
+      showError("No access token found. Use the link shared by the lecturer.");
+      return;
+    }
+
+    // Resolve server origin or use current window location
+    apiBase = window.location.origin;
+    fetch("/api/host").then(function (r) { return r.json(); }).then(function (h) {
+      if (h && h.origin && window.location.hostname === "localhost") {
+        apiBase = h.origin;
+      }
+    }).catch(function () {}).finally(function () {
+      loadSession();
+    });
+
+    function loadSession() {
+      fetch(apiUrl("/api/ta/" + encodeURIComponent(taToken)))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) {
+            showError(data.message || "This link has expired or the session has ended.");
+            return;
+          }
+          sessionCtx = data.session;
+          bootUI();
+        })
+        .catch(function () {
+          showError("Could not connect to Attendify. Make sure you are on the same network as the lecturer's computer.");
+        });
+    }
+
+    function bootUI() {
+      document.getElementById("loadingScreen").classList.add("hidden");
+      document.getElementById("mainUI").classList.remove("hidden");
+      document.getElementById("mainUI").classList.add("flex");
+
+      // Fill header
+      document.getElementById("hdr-lecture").textContent = sessionCtx.lectureName || "Attendance Session";
+      document.getElementById("hdr-programme").textContent =
+        sessionCtx.programme ? sessionCtx.programme.code + " — " + sessionCtx.programme.name : "";
+      document.getElementById("hdr-week").textContent = "Week " + (sessionCtx.weekNumber || 1);
+
+      // Populate any already-scanned records (from before this TA joined)
+      var existing = sessionCtx.records || [];
+      existing.forEach(function (rec) {
+        if (!scannedStudents.some(function (s) { return s.studentId === rec.studentId; })) {
+          scannedStudents.unshift({
+            studentId: rec.studentId,
+            name: rec.name,
+            index: rec.studentIndex,
+            photo: rec.photo || "",
+            scannedAt: rec.scannedAt
+          });
+        }
+      });
+      renderRecent();
+
+      // Give DOM time to calculate dimensions before initializing camera
+      setTimeout(startCamera, 250);
+
+      // Pre-load programme students for manual attendance
+      loadProgrammeRoster();
+
+      // Poll for new scans from other devices every 6s
+      setInterval(pollSession, 6000);
+    }
+
+    // ─── Camera Management ────────────────────────────────────────────────────
+    function startCamera() {
+      if (typeof Html5Qrcode === "undefined") {
+        showCameraPrompt("Scanner library is still loading. Tap to retry.");
+        return;
+      }
+
+      var isSecure = window.isSecureContext || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      if (!isSecure && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
+        var httpsTarget = window.location.href.replace(/^http:/, "https:").replace(":3000", ":3443");
+        showCameraPrompt(
+          "Mobile browsers require HTTPS for camera.<br><br>" +
+          "<a href='" + esc(httpsTarget) + "' class='inline-block px-3 py-1.5 rounded-lg bg-teal-600 text-white font-bold text-xs underline'>Switch to HTTPS (Port 3443)</a><br>" +
+          "<span class='text-[10px] text-slate-400 mt-1 block'>Accept the security prompt to proceed</span>"
+        );
+        return;
+      }
+
+      // High sensitivity scanning configuration:
+      // - 25 fps for high-speed continuous frame scanning
+      // - Expanded qrbox (92% of viewfinder) for wide detection area
+      // - Native hardware BarcodeDetector enabled
+      var config = {
+        fps: 25,
+        qrbox: function (viewfinderWidth, viewfinderHeight) {
+          var minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          var size = Math.max(220, Math.floor(minEdge * 0.92));
+          return { width: size, height: size };
+        },
+        aspectRatio: 1.0,
+        disableFlip: false
+      };
+
+      try {
+        if (!scanner) {
+          scanner = new Html5Qrcode("ta-qr-reader", {
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+            verbose: false
+          });
+        }
+      } catch (e) {
+        console.warn("Html5Qrcode instantiation:", e);
+      }
+
+      // Start with environment (rear) camera
+      scanner.start({ facingMode: "environment" }, config, onScan, function () {})
+        .then(function () {
+          hideCameraPrompt();
+        })
+        .catch(function (err) {
+          console.warn("Facing environment failed, attempting user camera:", err);
+          // Try user (front) facing fallback
+          try {
+            scanner = new Html5Qrcode("ta-qr-reader", {
+              experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+              verbose: false
+            });
+            scanner.start({ facingMode: "user" }, config, onScan, function () {})
+              .then(function () {
+                hideCameraPrompt();
+              })
+              .catch(function (err2) {
+                console.error("Camera start failed entirely:", err2);
+                handleCameraError(err2);
+              });
+          } catch (e2) {
+            handleCameraError(err);
+          }
+        });
+    }
+
+    function handleCameraError(err) {
+      var msg = (err && err.message) || String(err || "");
+      if (msg.indexOf("NotAllowedError") !== -1 || msg.indexOf("Permission") !== -1) {
+        showCameraPrompt("Camera permission was denied. Tap 'Start Camera' and allow camera access, or use Manual.");
+      } else if (!navigator.mediaDevices || msg.indexOf("getUserMedia") !== -1) {
+        var httpsTarget = window.location.href.replace(/^http:/, "https:").replace(":3000", ":3443");
+        showCameraPrompt(
+          "Camera requires HTTPS on mobile.<br><a href='" + esc(httpsTarget) + "' class='text-teal-400 font-bold underline'>Switch to HTTPS</a>"
+        );
+      } else {
+        showCameraPrompt("Could not start camera. Tap to try again or use manual attendance.");
+      }
+    }
+
+    function stopCamera() {
+      if (!scanner) return;
+      var s = scanner;
+      scanner = null;
+      if (s.isScanning) {
+        s.stop().then(function () { return s.clear(); }).catch(function () {});
+      }
+    }
+
+    function showCameraPrompt(msg) {
+      var prompt = document.getElementById("ta-camera-prompt");
+      var text = document.getElementById("ta-camera-msg");
+      if (text) text.innerHTML = msg;
+      if (prompt) prompt.classList.remove("hidden");
+    }
+
+    function hideCameraPrompt() {
+      var prompt = document.getElementById("ta-camera-prompt");
+      if (prompt) prompt.classList.add("hidden");
+    }
+
+    document.getElementById("btn-retry-camera").addEventListener("click", function () {
+      hideCameraPrompt();
+      stopCamera();
+      setTimeout(startCamera, 200);
+    });
+
+    document.getElementById("btn-prompt-manual").addEventListener("click", function () {
+      openManualModal();
+    });
+
+    // ─── Scan handling ────────────────────────────────────────────────────────
+    function onScan(text) {
+      var now = Date.now();
+      if (text === lastCode && now - lastScanAt < 2000) return;
+      lastCode = text;
+      lastScanAt = now;
+      submitScan(text);
+    }
+
+    function submitScan(text) {
+      var parsed = parseQrText(text);
+      var payload = {
+        classId: sessionCtx.classId,
+        weekNumber: sessionCtx.weekNumber
+      };
+      if (sessionCtx.courseId) payload.courseId = sessionCtx.courseId;
+      else payload.lectureName = sessionCtx.lectureName;
+
+      if (parsed && parsed.qrToken) payload.qrToken = parsed.qrToken;
+      else if (parsed && parsed.index) payload.index = parsed.index;
+      else payload.index = text;
+
+      fetch(apiUrl("/api/attendance"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+        .then(function (r) { return r.json(); })
+        .then(handleScanResult)
+        .catch(function () {
+          showToast("Network error — try again.", "rose");
+        });
+    }
+
+    function parseQrText(text) {
+      var raw = String(text || "").trim();
+      if (raw.indexOf("ATTENDIFY:v1:") === 0) return { qrToken: raw.slice(13) };
+      var parts = raw.split("|");
+      if (parts.length >= 3 && parts[0] === "ATD") return { classId: parts[1], index: parts.slice(2).join("|") };
+      return null;
+    }
+
+    function handleScanResult(result) {
+      if (!result.ok) {
+        var msg = result.message || result.error || "Could not mark attendance.";
+        if (result.error === "session_closed") {
+          showSessionClosed();
+          return;
+        }
+        showToast(msg, "rose");
+        return;
+      }
+      var student = result.student;
+      var isDup = result.duplicate;
+      showVerified(student, result.record.scannedAt, isDup);
+
+      if (!isDup) {
+        scannedStudents.unshift({
+          studentId: student.id,
+          name: student.name,
+          index: student.index,
+          photo: student.photo || "",
+          scannedAt: result.record.scannedAt
+        });
+        renderRecent();
+        renderManualRoster();
+      }
+    }
+
+    // ─── Poll for remote updates ───────────────────────────────────────────────
+    function pollSession() {
+      fetch(apiUrl("/api/ta/" + encodeURIComponent(taToken)))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) { showSessionClosed(); return; }
+          var remote = data.session.records || [];
+          var updated = false;
+          remote.forEach(function (rec) {
+            if (!scannedStudents.some(function (s) { return s.studentId === rec.studentId; })) {
+              scannedStudents.push({
+                studentId: rec.studentId,
+                name: rec.name,
+                index: rec.studentIndex,
+                photo: rec.photo || "",
+                scannedAt: rec.scannedAt
+              });
+              updated = true;
+            }
+          });
+          if (updated) {
+            scannedStudents.sort(function (a, b) { return b.scannedAt.localeCompare(a.scannedAt); });
+            renderRecent();
+            renderManualRoster();
+          }
+        })
+        .catch(function () {});
+    }
+
+    // ─── Verified banner ─────────────────────────────────────────────────────
+    function showVerified(student, scannedAt, isDup) {
+      var box = document.getElementById("ta-verified-box");
+      var shell = isDup
+        ? "bg-amber-50 border-amber-200"
+        : "bg-[#99f6e4]/85 border-[#5eead4]";
+      var badge = isDup
+        ? "text-amber-900 bg-amber-100 border-amber-200"
+        : "text-[#0f766e] bg-[#2dd4bf]/40 border-[#14b8a6]/40";
+      var label = isDup ? "Duplicate scan" : "VERIFIED";
+      var timeHtml = !isDup
+        ? '<span class="text-[11px] text-teal-800 font-medium ml-1">' + esc(fmt(scannedAt)) + '</span>'
+        : '';
+      var subtitle = isDup
+        ? '<p class="text-xs text-amber-800 font-medium">First scan: <span class="font-mono">' + esc(fmt(scannedAt)) + '</span></p>'
+        : '<p class="text-xs text-teal-800 font-medium">ID: <span class="font-mono">' + esc(student.index) + '</span> • Present</p>';
+
+      box.innerHTML =
+        '<div class="slide-down flex items-center gap-3 p-3.5 border ' + shell + ' rounded-2xl shadow-sm">' +
+        '<div class="relative shrink-0">' +
+        renderAvatar(student, "w-14 h-14", "ring-2 ring-white shadow") +
+        '<span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#0d9488] text-white flex items-center justify-center text-[11px] font-bold shadow ring-2 ring-white">✓</span>' +
+        '</div>' +
+        '<div class="flex-1 min-w-0">' +
+        '<div class="flex items-center gap-2 flex-wrap">' +
+        '<span class="text-[10px] font-black uppercase tracking-wider border px-2 py-0.5 rounded ' + badge + '">' + esc(label) + '</span>' +
+        timeHtml +
+        '</div>' +
+        '<p class="font-bold text-teal-950 mt-0.5 truncate text-sm">' + esc(student.name) + '</p>' +
+        subtitle +
+        '</div>' +
+        '<button type="button" id="ta-undo-btn" class="text-xs font-bold text-teal-800 hover:text-teal-950 px-2 py-1 shrink-0">undo</button>' +
+        '</div>';
+
+      box.classList.remove("hidden");
+
+      document.getElementById("ta-undo-btn").addEventListener("click", function () {
+        undoScan(student);
+      });
+
+      clearTimeout(box._clearTimer);
+      box._clearTimer = setTimeout(function () {
+        box.classList.add("hidden");
+        box.innerHTML = "";
+      }, 7000);
+    }
+
+    function undoScan(student) {
+      var payload = {
+        classId: sessionCtx.classId,
+        studentId: student.id,
+        weekNumber: sessionCtx.weekNumber
+      };
+      if (sessionCtx.courseId) payload.courseId = sessionCtx.courseId;
+      else payload.lectureName = sessionCtx.lectureName;
+
+      fetch(apiUrl("/api/attendance/remove"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (r) { return r.json(); }).then(function (result) {
+        if (!result.ok) { showToast(result.error || "Could not undo.", "rose"); return; }
+        scannedStudents = scannedStudents.filter(function (s) { return s.studentId !== student.id; });
+        document.getElementById("ta-verified-box").classList.add("hidden");
+        document.getElementById("ta-verified-box").innerHTML = "";
+        renderRecent();
+        renderManualRoster();
+      });
+    }
+
+    // ─── Recent scans list ────────────────────────────────────────────────────
+    function renderRecent() {
+      var list = document.getElementById("ta-recent-list");
+      var sub = document.getElementById("ta-recent-subtitle");
+      var n = scannedStudents.length;
+      sub.textContent = n ? n + " marked just now" : "Waiting for scans";
+
+      if (!n) {
+        list.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">Scanned students appear here.</p>';
+        return;
+      }
+      list.innerHTML = scannedStudents.map(function (s) {
+        return (
+          '<div class="flex items-center gap-3 p-3 rounded-2xl bg-[#f8fafc] border border-slate-200/60 shadow-sm">' +
+          renderAvatar(s, "w-11 h-11") +
+          '<div class="flex-1 min-w-0">' +
+          '<p class="font-bold text-slate-800 text-sm truncate">' + esc(s.name) + '</p>' +
+          '<p class="text-[11px] text-slate-500 font-mono">' + esc(s.index) + ' • ' + esc(fmt(s.scannedAt)) + '</p>' +
+          '</div>' +
+          '<span class="text-[10px] font-bold text-teal-800 bg-teal-50 border border-teal-200/80 px-2.5 py-0.5 rounded-full shrink-0">Present</span>' +
+          '<button type="button" data-sid="' + esc(s.studentId) + '" data-sname="' + esc(s.name) + '" data-sindex="' + esc(s.index) + '" class="close-scan-btn text-xs font-semibold text-slate-400 hover:text-rose-600 px-2 py-1 shrink-0">close</button>' +
+          '</div>'
+        );
+      }).join("");
+
+      list.querySelectorAll(".close-scan-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          undoScan({ id: btn.getAttribute("data-sid"), index: btn.getAttribute("data-sindex"), name: btn.getAttribute("data-sname") });
+        });
+      });
+    }
+
+    // ─── Manual Attendance Feature ───────────────────────────────────────────
+    function loadProgrammeRoster() {
+      fetch(apiUrl("/api/state"))
+        .then(function (r) { return r.json(); })
+        .then(function (state) {
+          programmeStudents = (state.students || []).filter(function (s) {
+            return s.classId === sessionCtx.classId;
+          });
+          // Backfill photos into scannedStudents if any are missing
+          scannedStudents.forEach(function (ss) {
+            if (!ss.photo) {
+              var found = programmeStudents.find(function (p) { return p.id === ss.studentId || p.index === ss.index; });
+              if (found && found.photo) ss.photo = found.photo;
+            }
+          });
+          renderRecent();
+          renderManualRoster();
+        })
+        .catch(function () {});
+    }
+
+    function openManualModal() {
+      document.getElementById("manualModal").classList.remove("hidden");
+      document.getElementById("manual-error").classList.add("hidden");
+      document.getElementById("manual-index-input").value = "";
+      document.getElementById("manual-search-filter").value = "";
+      renderManualRoster();
+      setTimeout(function () {
+        document.getElementById("manual-index-input").focus();
+      }, 100);
+    }
+
+    function closeManualModal() {
+      document.getElementById("manualModal").classList.add("hidden");
+    }
+
+    function renderManualRoster() {
+      var container = document.getElementById("manual-roster-list");
+      if (!container) return;
+      var query = (document.getElementById("manual-search-filter") ? document.getElementById("manual-search-filter").value : "").trim().toLowerCase();
+
+      var list = programmeStudents.filter(function (s) {
+        if (!query) return true;
+        return (s.name && s.name.toLowerCase().indexOf(query) !== -1) ||
+               (s.index && s.index.toLowerCase().indexOf(query) !== -1);
+      });
+
+      if (!list.length) {
+        container.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">No matching students found.</p>';
+        return;
+      }
+
+      var markedMap = {};
+      scannedStudents.forEach(function (s) { markedMap[s.studentId] = true; });
+
+      container.innerHTML = list.map(function (s) {
+        var isMarked = markedMap[s.id];
+        return (
+          '<div class="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-slate-100 ' + (isMarked ? 'bg-teal-50/60 border-teal-100' : 'bg-white') + '">' +
+          '<div class="flex items-center gap-2.5 min-w-0 flex-1">' +
+          renderAvatar(s, "w-10 h-10") +
+          '<div class="min-w-0 flex-1">' +
+          '<p class="text-xs font-bold text-slate-900 truncate">' + esc(s.name) + '</p>' +
+          '<p class="text-[11px] font-mono text-slate-500 truncate">' + esc(s.index) + '</p>' +
+          '</div>' +
+          '</div>' +
+          (isMarked
+            ? '<span class="text-[11px] font-bold text-teal-700 bg-teal-100 px-2.5 py-1 rounded-lg">Present ✓</span>'
+            : '<button type="button" data-action="mark-manual-student" data-index="' + esc(s.index) + '" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-lg shadow-sm">Mark</button>'
+          ) +
+          '</div>'
+        );
+      }).join("");
+
+      container.querySelectorAll("[data-action=mark-manual-student]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var index = btn.getAttribute("data-index");
+          submitScan(index);
+        });
+      });
+    }
+
+    document.getElementById("btn-ta-manual").addEventListener("click", openManualModal);
+    document.getElementById("manual-modal-close").addEventListener("click", closeManualModal);
+    document.getElementById("manualModal").addEventListener("click", function (e) {
+      if (e.target.id === "manualModal") closeManualModal();
+    });
+
+    document.getElementById("manual-search-filter").addEventListener("input", function () {
+      renderManualRoster();
+    });
+
+    document.getElementById("manual-index-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var input = document.getElementById("manual-index-input");
+      var val = (input.value || "").trim();
+      var err = document.getElementById("manual-error");
+      if (!val) return;
+      err.classList.add("hidden");
+      submitScan(val);
+      input.value = "";
+    });
+
+    // ─── Save / close session ─────────────────────────────────────────────────
+    document.getElementById("btn-ta-save").addEventListener("click", function () {
+      if (!confirm("Save session? Attendance has been recorded for the lecturer.")) return;
+      showSaved();
+    });
+
+    function showSaved() {
+      stopCamera();
+      document.getElementById("savedScreen").classList.remove("hidden");
+      document.getElementById("saved-count").textContent =
+        scannedStudents.length + " student" + (scannedStudents.length === 1 ? "" : "s") + " marked present.";
+    }
+
+    function showSessionClosed() {
+      stopCamera();
+      showError("This attendance session has been closed by the lecturer.");
+    }
+
+    // ─── Error / Toast helpers ────────────────────────────────────────────────
+    function showError(msg) {
+      document.getElementById("loadingScreen").classList.add("hidden");
+      document.getElementById("mainUI").classList.add("hidden");
+      document.getElementById("errorMsg").textContent = msg || "Something went wrong.";
+      document.getElementById("errorScreen").classList.remove("hidden");
+    }
+
+    var toastTimer = null;
+    function showToast(msg, color) {
+      var existing = document.getElementById("ta-toast");
+      if (existing) existing.remove();
+      clearTimeout(toastTimer);
+      var colors = {
+        rose:  "bg-rose-600 text-white",
+        amber: "bg-amber-500 text-white",
+        teal:  "bg-teal-600 text-white"
+      };
+      var div = document.createElement("div");
+      div.id = "ta-toast";
+      div.className = "fixed bottom-24 inset-x-4 z-50 py-3 px-4 rounded-2xl text-sm font-semibold text-center shadow-lg " + (colors[color] || colors.rose);
+      div.textContent = msg;
+      document.body.appendChild(div);
+      toastTimer = setTimeout(function () { div.remove(); }, 3200);
+    }
+
+  })();
+  </script>
+</body>
+</html>
