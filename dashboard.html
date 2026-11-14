@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Attendify - Faculty Classes & Dashboard</title>
+  <title>Attendify - Classes & Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/tailwind-dashboard.js"></script>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=9">
 </head>
 <body class="h-full bg-[#f8fafc] text-slate-800 antialiased flex flex-row overflow-hidden">
 
   <!-- ==================== LEFT PERSISTENT SIDEBAR ==================== -->
-  <aside class="w-64 bg-brand-900 text-slate-300 flex flex-col justify-between shrink-0 select-none border-r border-brand-800">
+  <aside class="faculty-sidebar w-64 bg-brand-900 text-slate-300 flex flex-col justify-between shrink-0 select-none border-r border-brand-800">
     <div class="flex flex-col flex-1 min-h-0">
       <!-- App Brand Header -->
       <div class="p-6 pb-5 flex items-center gap-3 border-b border-brand-800/60">
@@ -25,7 +25,7 @@
         </div>
         <div>
           <h1 class="text-white font-bold text-lg tracking-tight leading-none">Attendify</h1>
-          <span class="text-tealAccent-400 text-xs font-semibold tracking-wider uppercase">Faculty Portal</span>
+          <span class="text-tealAccent-400 text-xs font-semibold tracking-wider uppercase">Attendance Portal</span>
         </div>
       </div>
 
@@ -33,16 +33,15 @@
     </div>
 
     <!-- User / Profile Footer -->
-    <div class="p-4 border-t border-brand-800/60 bg-brand-900/80">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-full ring-2 ring-tealAccent-400/40 bg-brand-700 flex items-center justify-center font-bold text-white text-sm">
-          SM
-        </div>
+    <div class="p-4 border-t border-brand-800/60 bg-brand-900/80 space-y-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div id="lecturer-avatar" class="w-10 h-10 shrink-0 rounded-full ring-2 ring-tealAccent-400/40 bg-brand-700 flex items-center justify-center font-bold text-white text-sm">LC</div>
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-semibold text-white truncate">Dr. Sarah Mitchell</p>
-          <p class="text-xs text-slate-400 truncate">Computer Science Faculty</p>
+          <p id="lecturer-name" class="text-sm font-semibold text-white truncate">Account</p>
+          <p id="lecturer-username" class="text-xs text-slate-400 truncate">Sign in required</p>
         </div>
       </div>
+      <button type="button" id="btn-logout" class="sidebar-logout-btn w-full py-2 rounded-lg border border-brand-700 text-xs font-semibold text-slate-300 hover:text-white hover:bg-brand-800 transition">Sign out</button>
     </div>
   </aside>
 
@@ -50,8 +49,8 @@
   <main class="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-50">
 
     <!-- Top Header Bar -->
-    <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 z-10">
-      <div class="flex items-center gap-2.5">
+    <header class="faculty-topbar h-14 sm:h-16 bg-white border-b border-slate-200 px-4 sm:px-8 shrink-0 z-10">
+      <div class="flex items-center gap-2.5 min-w-0 flex-1">
         <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-500 to-tealAccent-500 flex items-center justify-center text-white shadow-sm">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
         </span>
@@ -61,74 +60,67 @@
         </div>
       </div>
 
-      <!-- Quick Launch Scanner Header CTA -->
-      <div class="flex items-center gap-3">
-        <button id="btn-open-scanner" class="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-brand-900 hover:bg-brand-800 rounded-xl shadow-md shadow-brand-900/10 border border-brand-700 transition">
-          <svg class="w-4 h-4 text-tealAccent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
-          Open Live Scanner HUD
-        </button>
-      </div>
     </header>
 
     <!-- Scrollable Content Area -->
-    <div class="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+    <div class="flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
       <!-- Welcome & Metric Summary -->
       <div>
-        <h2 class="text-2xl font-black text-brand-900 tracking-tight">Lecturer dashboard</h2>
-        <p class="text-sm text-slate-500 mt-0.5">Create programmes, share each programme’s registration link, add courses, then take attendance by week.</p>
+        <h2 class="text-xl sm:text-2xl font-black text-brand-900 tracking-tight">Lecturer dashboard</h2>
+        <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Students join a programme once (one QR). You only see your own courses; other lecturers’ classes stay private.</p>
       </div>
 
       <!-- Semester overview -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div class="group bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md hover:border-brand-200/80 transition">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Students registered</p>
-              <p id="stat-students" class="text-3xl font-black text-brand-900 mt-2 tabular-nums">0</p>
-              <p class="text-xs text-slate-500 mt-1.5">Across all programmes</p>
+      <div class="dashboard-stat-grid">
+        <div class="dashboard-stat-card group bg-white border border-slate-200/90 shadow-sm hover:shadow-md hover:border-brand-200/80 transition">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">Students registered</p>
+              <p id="stat-students" class="dashboard-stat-value font-black text-brand-900 tabular-nums">0</p>
+              <p class="text-[10px] sm:text-xs text-slate-500 mt-1">Across all programmes</p>
             </div>
-            <div class="w-10 h-10 rounded-xl bg-tealAccent-50 text-tealAccent-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-            </div>
-          </div>
-        </div>
-
-        <div class="group bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md hover:border-brand-200/80 transition">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Programmes</p>
-              <p id="stat-classes" class="text-3xl font-black text-brand-900 mt-2 tabular-nums">0</p>
-              <p id="stat-class-list" class="text-xs text-slate-500 mt-1.5 truncate">—</p>
-            </div>
-            <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+            <div class="dashboard-stat-icon bg-tealAccent-50 text-tealAccent-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
             </div>
           </div>
         </div>
 
-        <div class="group bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md hover:border-brand-200/80 transition">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Semester weeks</p>
-              <p id="stat-weeks" class="text-3xl font-black text-brand-900 mt-2 tabular-nums">0</p>
-              <p id="stat-week-detail" class="text-xs text-slate-500 mt-1.5">—</p>
+        <div class="dashboard-stat-card group bg-white border border-slate-200/90 shadow-sm hover:shadow-md hover:border-brand-200/80 transition">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">Programmes</p>
+              <p id="stat-classes" class="dashboard-stat-value font-black text-brand-900 tabular-nums">0</p>
+              <p id="stat-class-list" class="text-[10px] sm:text-xs text-slate-500 mt-1 truncate">—</p>
             </div>
-            <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <div class="dashboard-stat-icon bg-brand-50 text-brand-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
             </div>
           </div>
         </div>
 
-        <div class="group bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md hover:border-emerald-200/80 transition">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Attendance taken</p>
-              <p id="stat-attendance" class="text-3xl font-black text-emerald-700 mt-2 tabular-nums">0</p>
-              <p id="stat-attendance-detail" class="text-xs text-slate-500 mt-1.5">—</p>
+        <div class="dashboard-stat-card group bg-white border border-slate-200/90 shadow-sm hover:shadow-md hover:border-brand-200/80 transition">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">Semester weeks</p>
+              <p id="stat-weeks" class="dashboard-stat-value font-black text-brand-900 tabular-nums">0</p>
+              <p id="stat-week-detail" class="text-[10px] sm:text-xs text-slate-500 mt-1">—</p>
             </div>
-            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            <div class="dashboard-stat-icon bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-stat-card group bg-white border border-slate-200/90 shadow-sm hover:shadow-md hover:border-emerald-200/80 transition">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">Attendance taken</p>
+              <p id="stat-attendance" class="dashboard-stat-value font-black text-emerald-700 tabular-nums">0</p>
+              <p id="stat-attendance-detail" class="text-[10px] sm:text-xs text-slate-500 mt-1">—</p>
+            </div>
+            <div class="dashboard-stat-icon bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
             </div>
           </div>
         </div>
@@ -138,7 +130,7 @@
       <div class="space-y-3">
         <h3 class="text-base font-bold text-slate-900">Your programmes</h3>
 
-        <div id="dashboard-class-cards" class="flex flex-wrap gap-4"></div>
+        <div id="dashboard-class-cards"></div>
       </div>
 
     </div>
@@ -148,14 +140,15 @@
   <div id="editProgrammeModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-6">
       <h3 class="text-lg font-bold text-slate-900">Edit programme</h3>
+      <p class="text-[11px] text-slate-500 mt-1">Updates the programme label on your dashboard and roster.</p>
       <form id="edit-programme-form" class="mt-4 space-y-3">
         <input type="hidden" id="edit-programme-id" name="id" value="" />
         <div>
-          <label class="text-xs font-semibold text-slate-600">Programme code</label>
+          <label class="text-xs font-semibold text-slate-600" for="edit-programme-code">Programme code</label>
           <input id="edit-programme-code" name="code" required class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"/>
         </div>
         <div>
-          <label class="text-xs font-semibold text-slate-600">Programme name</label>
+          <label class="text-xs font-semibold text-slate-600" for="edit-programme-name">Programme name</label>
           <input id="edit-programme-name" name="name" required class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"/>
         </div>
         <p id="edit-programme-error" class="hidden text-xs text-rose-600 font-medium"></p>
@@ -167,16 +160,16 @@
     </div>
   </div>
 
-  <!-- Start attendance: name the course for this session -->
+  <!-- Start attendance: pick a programme course, then week -->
   <div id="startAttendanceModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4">
     <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-6">
-      <h3 class="text-lg font-bold text-slate-900">Start attendance</h3>
-      <p class="text-xs text-slate-500 mt-1">Programme <span id="start-programme-code" class="font-mono font-semibold text-slate-700"></span> — <span id="start-programme-name" class="font-semibold text-slate-700"></span></p>
+      <h3 class="text-lg font-bold text-slate-900">Take attendance</h3>
+      <p class="text-xs text-slate-500 mt-1">Programme <span id="start-programme-code" class="font-mono font-semibold text-slate-700"></span> — <span id="start-programme-name" class="font-semibold text-slate-700"></span><span id="start-programme-level" class="hidden font-semibold text-tealAccent-700"></span></p>
       <form id="start-attendance-form" class="mt-4 space-y-3">
         <div>
-          <label for="start-lecture-name" class="text-xs font-semibold text-slate-600">Course / module (optional if you use a course page)</label>
-          <input id="start-lecture-name" required placeholder="e.g. CS 101 — Introduction to Computer Science" class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"/>
-          <p class="text-[10px] text-slate-400 mt-1">Tip: create courses under a programme in the sidebar — they link to a dedicated course page.</p>
+          <label for="start-attendance-course" class="text-xs font-semibold text-slate-600">Course</label>
+          <select id="start-attendance-course" required class="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"></select>
+          <p id="start-attendance-no-courses" class="hidden text-[11px] text-amber-700 font-medium mt-1.5">No courses yet for this programme. Use <strong>+</strong> on the dashboard card or in the sidebar to create one, then try again.</p>
         </div>
         <div>
           <label for="start-attendance-week" class="text-xs font-semibold text-slate-600">Semester week</label>
@@ -207,32 +200,34 @@
           <div class="w-5 h-5 border-2 border-slate-200 border-t-teal-500 rounded-full animate-spin"></div>
         </div>
       </div>
-      <!-- Tappable link -->
-      <div class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 mb-3">
-        <a id="ta-share-link-anchor" href="#" target="_blank" rel="noopener noreferrer"
-          class="block text-xs font-mono text-teal-700 underline underline-offset-2 break-all leading-relaxed"
-          style="word-break:break-all">Generating link…</a>
-      </div>
+      <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Tap to open</p>
+      <a id="ta-share-link-anchor" href="#" target="_blank" rel="noopener noreferrer"
+        class="block mb-3 rounded-xl border border-teal-200 bg-teal-50 px-3 py-3 text-sm font-semibold text-teal-800 hover:bg-teal-100 hover:border-teal-300 transition break-all leading-snug">
+        Generating link…
+      </a>
       <div class="flex gap-2 mb-3">
+        <a id="ta-share-open" href="#" target="_blank" rel="noopener noreferrer"
+          class="flex-1 py-2.5 rounded-xl bg-brand-900 hover:bg-brand-800 text-white text-xs font-bold text-center transition">
+          Open scanner link
+        </a>
         <button type="button" id="ta-share-copy"
-          class="flex-1 py-2 rounded-xl bg-brand-900 hover:bg-brand-800 text-white text-xs font-bold transition">
-          Copy link
+          class="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition">
+          Copy
         </button>
       </div>
-      <p id="ta-share-copied" class="hidden text-center text-xs text-teal-600 font-semibold mb-2">✓ Link copied to clipboard!</p>
-      <p class="text-[10px] text-slate-400 text-center">TA can tap the link above to open scanner on their phone. Expires in 12 h.</p>
+      <p id="ta-share-copied" class="hidden text-center text-xs text-teal-600 font-semibold mb-2">✓ Link copied</p>
+      <p class="text-[10px] text-slate-400 text-center">Tap the link or Open — no paste into the browser needed. Expires in 12 h.</p>
     </div>
   </div>
 
-  <div id="scannerModal" class="hidden fixed inset-0 z-50 bg-slate-100 overflow-y-auto" role="dialog" aria-modal="true">
-    <div id="scannerDialog" class="max-w-lg mx-auto min-h-full flex flex-col px-4 py-5 pb-8">
-      <div class="flex items-center justify-between gap-3 mb-3">
+  <div id="scannerModal" class="hidden fixed inset-0 z-50 bg-slate-100 overflow-y-auto md:overflow-hidden" role="dialog" aria-modal="true">
+    <div id="scannerDialog" class="scanner-dialog w-full max-w-lg md:max-w-6xl mx-auto min-h-full md:h-full md:max-h-screen flex flex-col px-4 py-5 pb-8 md:py-6">
+      <div class="flex items-center justify-between gap-3 mb-3 md:mb-4 shrink-0">
         <div class="min-w-0">
           <h3 id="scannerTitle" class="font-bold text-slate-900 text-base truncate"></h3>
           <p id="scanner-programme-label" class="text-[11px] text-slate-500 truncate"></p>
         </div>
         <div class="flex items-center gap-2">
-          <!-- Share Access button (shown after session starts) -->
           <button id="btn-share-access" type="button"
             class="hidden flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow transition">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -244,40 +239,58 @@
           <button id="btn-close-scanner" type="button" class="w-9 h-9 rounded-full bg-white border border-slate-200 text-slate-600 shadow-sm">×</button>
         </div>
       </div>
-      <div class="scan-camera-shell shadow-lg mb-3">
-        <p class="scan-camera-label">Lecturer camera: scan student QR pass</p>
-        <span class="scan-corner scan-corner-tl"></span>
-        <span class="scan-corner scan-corner-tr"></span>
-        <span class="scan-corner scan-corner-bl"></span>
-        <span class="scan-corner scan-corner-br"></span>
-        <div id="qr-reader"></div>
-        <div class="absolute bottom-3 inset-x-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
-          <button type="button" id="btn-scan-simulate" class="pointer-events-auto flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow">Simulate scan</button>
-          <div class="pointer-events-auto flex gap-1">
-            <button type="button" id="btn-scan-flash" class="w-9 h-9 rounded-full bg-black/50 text-white text-xs" title="Flash">⚡</button>
-            <button type="button" id="btn-scan-flip" class="w-9 h-9 rounded-full bg-black/50 text-white text-xs" title="Flip camera">↻</button>
+      <div class="scanner-layout flex-1 flex flex-col md:flex-row md:gap-6 md:min-h-0 md:overflow-hidden">
+        <div class="scanner-layout-camera flex flex-col gap-3 md:w-80 lg:w-96 md:shrink-0">
+          <div class="scan-camera-shell shadow-lg">
+            <p class="scan-camera-label">Lecturer camera: scan student QR pass</p>
+            <span class="scan-corner scan-corner-tl"></span>
+            <span class="scan-corner scan-corner-tr"></span>
+            <span class="scan-corner scan-corner-bl"></span>
+            <span class="scan-corner scan-corner-br"></span>
+            <div id="qr-reader"></div>
+            <div class="scan-frame-guide" aria-hidden="true"></div>
+            <div class="absolute bottom-3 inset-x-3 z-10 flex items-center justify-end gap-1 pointer-events-none">
+              <div class="pointer-events-auto flex gap-1">
+                <button type="button" id="btn-scan-flash" class="w-9 h-9 rounded-full bg-black/50 text-white text-xs" title="Flash">⚡</button>
+                <button type="button" id="btn-scan-flip" class="w-9 h-9 rounded-full bg-black/50 text-white text-xs" title="Flip camera">↻</button>
+              </div>
+            </div>
+          </div>
+          <form id="manual-index-form" class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm" autocomplete="off">
+            <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Manual attendance</p>
+            <p class="text-[11px] text-slate-500 mt-0.5 mb-2">Enter the last four digits of the student index (e.g. 0001).</p>
+            <div class="flex gap-2">
+              <input id="manual-index-suffix" name="suffix" inputmode="numeric" pattern="[0-9]{1,4}" maxlength="4" required placeholder="0001" class="flex-1 min-w-0 px-3 py-2 text-sm font-mono font-bold border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500"/>
+              <button type="submit" class="shrink-0 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">Mark present</button>
+            </div>
+            <p id="manual-index-error" class="hidden mt-2 text-[11px] text-rose-600 font-medium"></p>
+          </form>
+          <p id="scan-status" class="hidden" aria-live="polite"></p>
+          <div id="scan-hud-verified" class="hidden"></div>
+        </div>
+        <div class="scanner-layout-present flex flex-col flex-1 min-h-0 mt-4 md:mt-0">
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col flex-1 min-h-0 p-4 md:p-5">
+            <div class="flex items-center justify-between mb-3 shrink-0">
+              <h4 class="text-sm font-bold text-slate-800">Students present</h4>
+              <span id="scan-hud-recent-subtitle" class="text-[11px] text-slate-500">Waiting for scans</span>
+            </div>
+            <div id="scan-hud-recent-list" class="scan-present-list space-y-2 flex-1 min-h-0 overflow-y-auto max-h-[40vh] md:max-h-none mb-4"></div>
+            <div class="grid grid-cols-2 gap-2 sm:gap-3 mt-auto pt-2 shrink-0">
+              <a id="btn-view-roster" href="#" class="scan-footer-btn bg-sky-100 hover:bg-sky-200 text-sky-900 border border-sky-200 text-center">View roster</a>
+              <button type="button" id="btn-save-session" class="scan-footer-btn bg-brand-900 hover:bg-brand-800 text-white shadow-md">End session</button>
+            </div>
           </div>
         </div>
-      </div>
-      <p id="scan-status" class="hidden" aria-live="polite"></p>
-      <div id="scan-hud-verified" class="hidden mb-4"></div>
-      <div class="flex items-center justify-between mb-2">
-        <h4 class="text-sm font-bold text-slate-800">Recent scans</h4>
-        <span id="scan-hud-recent-subtitle" class="text-[11px] text-slate-500">Waiting for scans</span>
-      </div>
-      <div id="scan-hud-recent-list" class="space-y-2 flex-1 mb-4 max-h-[40vh] overflow-y-auto"></div>
-      <div class="grid grid-cols-2 gap-3 mt-auto pt-2">
-        <a id="btn-view-roster" href="#" class="py-3 rounded-2xl bg-sky-100 hover:bg-sky-200 text-sky-900 text-sm font-bold border border-sky-200 text-center">View roster</a>
-        <button type="button" id="btn-save-session" class="py-3 rounded-2xl bg-brand-900 hover:bg-brand-800 text-white text-sm font-bold shadow-md">End session</button>
       </div>
     </div>
   </div>
 
   <script src="js/qrcode.min.js"></script>
   <script src="js/html5-qrcode.min.js"></script>
-  <script src="js/store.js?v=18"></script>
-  <script src="js/scanner-hud.js?v=4"></script>
-  <script src="js/sidebar.js?v=10"></script>
-  <script src="js/dashboard.js?v=13"></script>
+  <script src="js/store.js?v=27"></script>
+  <script src="js/auth-guard.js?v=1"></script>
+  <script src="js/scanner-hud.js?v=18"></script>
+  <script src="js/sidebar.js?v=15"></script>
+  <script src="js/dashboard.js?v=26"></script>
 </body>
 </html>

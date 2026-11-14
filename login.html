@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendify — Automated Attendance Recording System | UCC</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23101627'%3E%3Cpath stroke='%2314b8a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/tailwind-dashboard.js"></script>
+  <link rel="stylesheet" href="css/auth.css?v=29">
+  <style>
+    .swoop-accent {
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+      width: 240px;
+      height: 180px;
+      pointer-events: none;
+      opacity: 0.95;
+    }
+    .demo-card { transition: all 0.18s ease-in-out; }
+    .demo-card:hover { transform: translateY(-1px); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn-spinner {
+      width: 17px;
+      height: 17px;
+      border: 2.5px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+    }
+  </style>
+</head>
+<body class="h-full bg-[#f8fafc] text-slate-800 antialiased flex flex-col lg:flex-row overflow-x-hidden font-sans">
+
+  <!-- ========================================================================= -->
+  <!-- LEFT COLUMN: Campus Photo + Transparent Blue Overlay + System Title & Features -->
+  <!-- ========================================================================= -->
+  <aside class="relative hero-overlay-bg lg:w-1/2 min-h-[480px] lg:min-h-screen text-white flex flex-col justify-between p-8 sm:p-12 lg:p-14 overflow-hidden select-none">
+
+    <!-- Top Left System Header: Badge + Title + Subtitle + Description -->
+    <div class="relative z-10 max-w-xl">
+      <div class="flex items-start gap-4">
+        <div class="pt-0.5">
+          <div class="auth-hero-title-wrap">
+            <div class="auth-hero-title-logo" aria-hidden="true">
+              <svg class="text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <h1 class="auth-hero-title-text text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+              Attendify
+            </h1>
+          </div>
+          <p class="text-blue-100 font-bold text-xs sm:text-sm tracking-wide mt-1">
+            Automated Attendance Recording System
+          </p>
+          <p class="text-white text-xs sm:text-[13px] leading-relaxed mt-2 max-w-md font-medium">
+            Helping lecturers and academic departments verify student attendance in real time, record QR check-ins with photo matching, and generate weekly audit-ready lecture sheets.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Watermark Logo of Attendify — centered on hero -->
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none select-none text-white z-0">
+      <svg class="w-[min(22rem,70vw)] h-[min(22rem,70vw)] sm:w-96 sm:h-96 opacity-[0.045]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+      </svg>
+    </div>
+
+    <!-- Bottom: features + UCC -->
+    <div class="auth-hero-features-wrap relative z-10 w-full space-y-2">
+      <div class="auth-hero-features space-y-2.5">
+
+      <!-- Feature 1: Lecturer / TA Registration & Access -->
+      <div class="auth-hero-feature-row flex items-center group">
+        <div class="auth-hero-feature-icon rounded-full bg-brand-700/80 border border-tealAccent-500/30 flex items-center justify-center shrink-0 shadow-sm shadow-black/15 text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+        </div>
+        <div>
+          <h3>Lecturer &amp; TA session control</h3>
+          <p>Launch live HUD or share temporary scanning passcodes with assistants</p>
+        </div>
+      </div>
+
+      <!-- Feature 2: Process QR Attendance -->
+      <div class="auth-hero-feature-row flex items-center group">
+        <div class="auth-hero-feature-icon rounded-full bg-brand-700/80 border border-tealAccent-500/30 flex items-center justify-center shrink-0 shadow-sm shadow-black/15 text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+          </svg>
+        </div>
+        <div>
+          <h3>Process student check-ins</h3>
+          <p>Instant QR scan, verified face photo lookup &amp; live roster check</p>
+        </div>
+      </div>
+
+      <!-- Feature 3: Track Weekly Attendance -->
+      <div class="auth-hero-feature-row flex items-center group">
+        <div class="auth-hero-feature-icon rounded-full bg-brand-700/80 border border-tealAccent-500/30 flex items-center justify-center shrink-0 shadow-sm shadow-black/15 text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <div>
+          <h3>Track semester progress</h3>
+          <p>16-week lecture progress, green/red attendance grids &amp; rates</p>
+        </div>
+      </div>
+
+      <!-- Feature 4: Transparent & Accountable -->
+      <div class="auth-hero-feature-row flex items-center group">
+        <div class="auth-hero-feature-icon rounded-full bg-brand-700/80 border border-tealAccent-500/30 flex items-center justify-center shrink-0 shadow-sm shadow-black/15 text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+        </div>
+        <div>
+          <h3>Transparent &amp; accountable</h3>
+          <p>Tamper-evident records, duplicate prevention &amp; CSV export</p>
+        </div>
+      </div>
+
+      </div>
+
+      <div class="flex items-center gap-3.5 pt-1">
+      <img src="assets/ucc-logo-hero.png?v=2" alt="University of Cape Coast" class="h-14 sm:h-16 w-auto shrink-0 object-contain drop-shadow-md">
+      <div>
+        <p class="text-[10px] sm:text-[11px] font-black tracking-[0.18em] text-white uppercase leading-snug">
+          University of Cape Coast
+        </p>
+        <p class="text-[11px] text-blue-200/90 font-medium mt-1">
+          Cape Coast, Ghana
+        </p>
+      </div>
+      </div>
+    </div>
+
+    <!-- Decorative Curved Swoosh in the Bottom Right Corner -->
+    <svg class="swoop-accent" viewBox="0 0 240 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0 180C90 180 180 140 240 0V180H0Z" fill="#101627" fill-opacity="0.28"/>
+      <path d="M60 180C130 180 195 145 240 40V180H60Z" fill="#0d9488" fill-opacity="0.22"/>
+    </svg>
+  </aside>
+
+
+  <!-- ========================================================================= -->
+  <!-- RIGHT COLUMN: Centered Floating Card with UCC Coat of Arms & Login Form   -->
+  <!-- ========================================================================= -->
+  <main class="auth-form-section lg:w-1/2 bg-[#f8fafc]">
+
+    <div class="auth-form-card bg-white rounded-3xl shadow-xl shadow-slate-200/70 border border-slate-200/80">
+
+      <header class="auth-form-header text-center">
+        <div class="auth-form-header-logos">
+          <div class="auth-form-logo-mark auth-form-logo-mark--ucc">
+            <img src="assets/ucc-logo-hero.png?v=2" alt="University of Cape Coast" class="auth-form-crest">
+          </div>
+          <div class="auth-form-logo-mark auth-form-logo-mark--app" aria-hidden="true">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+        </div>
+        <h1 class="text-base sm:text-lg font-black text-brand-900 tracking-tight leading-snug px-1">
+          University of Cape Coast <span class="text-tealAccent-600">Attendify</span>
+        </h1>
+        <p class="text-[11px] text-slate-500 font-medium mt-1.5">Student attendance system</p>
+      </header>
+
+      <div class="flex p-1 bg-slate-100 rounded-xl border border-slate-200/80">
+        <button type="button" id="tab-login" class="flex-1 py-2.5 text-xs font-bold rounded-lg auth-tab-active transition">Sign in</button>
+        <button type="button" id="tab-signup" class="flex-1 py-2.5 text-xs font-bold rounded-lg auth-tab-idle transition">Sign up</button>
+      </div>
+      <p id="auth-hint-login" class="auth-swipe-hint text-xs text-slate-500 text-center font-medium">
+        Swipe left or tap <span class="font-bold text-tealAccent-600">Sign up</span> for a new account
+      </p>
+      <p id="auth-hint-signup" class="hidden auth-swipe-hint text-xs text-slate-500 text-center font-medium">
+        Swipe right or tap <span class="font-bold text-brand-700">Sign in</span> to return
+      </p>
+
+      <div class="auth-viewport">
+        <div id="auth-slider" class="auth-slider">
+          <div class="auth-panel">
+            <div class="auth-form-panel-heading">
+              <h2 class="auth-form-panel-line auth-form-panel-line--accent">Welcome back</h2>
+              <span class="auth-form-panel-line auth-form-panel-line--muted" aria-hidden="true">·</span>
+              <p class="auth-form-panel-line auth-form-panel-line--muted">Sign in to your lecture account.</p>
+            </div>
+
+      <div id="login-error-banner" class="hidden mb-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+        <svg class="w-4 h-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span id="login-error-msg">Please enter valid login details.</span>
+      </div>
+
+      <!-- Login Form -->
+      <form id="login-form" novalidate autocomplete="on" class="auth-form-stack">
+
+        <!-- Field 1: Email or Username -->
+        <div class="auth-form-field">
+          <label for="login-username" class="auth-form-field-label">
+            Email or username
+          </label>
+          <div class="form-input-focus flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 transition">
+            <!-- User Icon -->
+            <svg class="w-4 h-4 text-slate-400 shrink-0 mr-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+            </svg>
+            <input id="login-username" name="username" type="text"
+              class="w-full bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+              placeholder="Enter your email or username" required autocomplete="username" spellcheck="false">
+          </div>
+        </div>
+
+        <!-- Field 2: Password with Eye Toggle -->
+        <div class="auth-form-field">
+          <label for="login-password" class="auth-form-field-label">
+            Password
+          </label>
+          <div class="form-input-focus flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 transition">
+            <!-- Lock Icon -->
+            <svg class="w-4 h-4 text-slate-400 shrink-0 mr-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+            <input id="login-password" name="password" type="password"
+              class="w-full bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+              placeholder="Enter your password" required autocomplete="current-password">
+            <!-- Show / Hide Password Eye Toggle -->
+            <button type="button" id="toggle-pw-visibility" class="text-slate-400 hover:text-slate-600 focus:outline-none ml-2 shrink-0 p-1" title="Show or hide password">
+              <svg id="pw-eye-open" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+              <svg id="pw-eye-closed" class="w-4 h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="auth-form-options-row">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="remember-me" checked
+              class="w-4 h-4 rounded border-slate-300 text-tealAccent-600 focus:ring-tealAccent-500 accent-teal-600 cursor-pointer">
+            <span class="text-xs font-semibold text-slate-600">Remember me</span>
+          </label>
+          <a href="#" onclick="alert('Please contact UCC Directorate of ICT Services (DIS) or your department head for password reset.'); return false;"
+            class="text-xs font-bold text-tealAccent-700 hover:text-tealAccent-800 transition">
+            Forgot password?
+          </a>
+        </div>
+
+        <!-- Submit Button: Sign In → (Matching reference image with blue theme & Attendify logo) -->
+        <button type="submit" id="btn-submit-login"
+          class="w-full mt-0.5 bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg shadow-brand-900/20 flex items-center justify-center gap-2.5 transition active:scale-[0.99] text-sm">
+          <svg class="w-4 h-4 text-tealAccent-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <span id="btn-submit-text">Sign In &rarr;</span>
+        </button>
+
+      </form>
+
+      <!-- TRY THE DEMO Section (Exact from reference image) -->
+      <div class="mt-7 pt-5 border-t border-slate-100">
+        <p class="text-[10px] font-extrabold tracking-widest text-slate-400 text-center uppercase mb-3">
+          TRY THE DEMO
+        </p>
+
+        <button type="button" id="demo-card-lecturer" class="demo-card w-full text-left bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col cursor-pointer">
+          <span class="text-xs font-bold text-slate-800">Course Lecturer</span>
+          <span class="text-[11px] text-slate-500 font-mono mt-0.5">lecturer@ucc.edu.gh</span>
+        </button>
+
+        <p class="text-[11px] text-slate-400 text-center mt-3 font-medium">
+          Demo password: <span class="text-slate-600 font-mono font-semibold">Demo1234</span>
+        </p>
+      </div>
+          </div>
+
+          <div class="auth-panel">
+            <h2 class="auth-form-panel font-black text-brand-900 tracking-tight">Create account</h2>
+
+            <div id="signup-error" class="hidden mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs"></div>
+
+            <form id="signup-form" class="auth-form-stack" autocomplete="on">
+              <label class="auth-form-field-label">Full name
+                <div class="form-input-focus flex items-center bg-slate-50 border border-slate-200 rounded-xl">
+                  <input id="signup-name" name="fullName" type="text" placeholder="e.g. Dr. Ama Mensah"
+                    class="w-full bg-transparent text-sm focus:outline-none" autocomplete="name">
+                </div>
+              </label>
+              <label class="auth-form-field-label">Username
+                <div class="form-input-focus flex items-center bg-slate-50 border border-slate-200 rounded-xl">
+                  <input id="signup-username" name="username" required type="text" placeholder="Username"
+                    class="w-full bg-transparent text-sm focus:outline-none" autocomplete="username" spellcheck="false" maxlength="64">
+                </div>
+              </label>
+              <label class="auth-form-field-label">Password
+                <div class="form-input-focus flex items-center bg-slate-50 border border-slate-200 rounded-xl">
+                  <input id="signup-password" name="password" required type="password" minlength="6" placeholder="At least 6 characters"
+                    class="w-full bg-transparent text-sm focus:outline-none" autocomplete="new-password">
+                </div>
+              </label>
+              <label class="auth-form-field-label">UCC programme
+                <div id="signup-programme-combo" class="auth-programme-combo">
+                  <button type="button" id="signup-programme-trigger" class="auth-programme-trigger" aria-expanded="false" aria-controls="signup-programme-panel">
+                    <span id="signup-programme-trigger-label" class="auth-programme-trigger-label text-slate-400">Choose programme</span>
+                    <svg class="auth-programme-chevron w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </button>
+                  <div id="signup-programme-panel" class="auth-programme-panel" hidden>
+                    <div class="auth-programme-search-wrap">
+                      <input id="signup-programme-search" type="search" placeholder="Search programmes…" autocomplete="off"
+                        class="auth-programme-combo-search w-full bg-transparent text-sm focus:outline-none" aria-label="Search programmes">
+                    </div>
+                    <div id="signup-programme-list" class="auth-programme-list" role="listbox" aria-label="Programmes">
+                      <p class="auth-programme-empty">Loading programmes…</p>
+                    </div>
+                  </div>
+                  <input type="hidden" id="signup-programme" value="">
+                </div>
+              </label>
+              <label class="auth-form-field-label">Level
+                <select id="signup-level" required class="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3 py-2 focus:outline-none focus:border-brand-400">
+                  <option value="" disabled selected>Choose level</option>
+                </select>
+              </label>
+              <div id="signup-roster-wrap" class="auth-roster-preview hidden" aria-live="polite">
+                <p id="signup-roster-heading" class="text-xs font-semibold text-brand-900 mb-2"></p>
+                <p id="signup-roster-empty" class="text-[11px] text-slate-500 hidden"></p>
+                <ul id="signup-roster-list" class="auth-roster-list text-xs text-slate-700"></ul>
+              </div>
+              <button type="submit" id="btn-signup"
+                class="w-full mt-0.5 bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-xl shadow-lg shadow-brand-900/20 text-sm flex items-center justify-center gap-2 transition active:scale-[0.99]">
+                <span id="btn-signup-text">Create account &amp; continue</span>
+              </button>
+            </form>
+            <p class="text-center text-xs text-slate-500 mt-5">
+              Already registered?
+              <button type="button" data-auth-show="login" class="font-bold text-tealAccent-700 hover:text-tealAccent-800">Sign in</button>
+            </p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script src="js/store.js?v=27"></script>
+  <script src="js/auth-page.js?v=7"></script>
+</body>
+</html>

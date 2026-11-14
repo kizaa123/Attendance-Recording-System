@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendify — Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/tailwind-dashboard.js"></script>
+  <link rel="stylesheet" href="css/style.css?v=7">
+  <link rel="stylesheet" href="css/auth.css?v=29">
+</head>
+<body class="h-full bg-[#f8fafc] text-slate-800 antialiased flex flex-row overflow-hidden">
+
+  <aside class="faculty-sidebar w-64 bg-brand-900 text-slate-300 flex flex-col justify-between shrink-0 select-none border-r border-brand-800">
+    <div class="flex flex-col flex-1 min-h-0">
+      <div class="p-6 pb-5 flex items-center gap-3 border-b border-brand-800/60">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-500 to-tealAccent-500 flex items-center justify-center text-white shadow-lg shadow-tealAccent-500/20">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-white font-bold text-lg tracking-tight leading-none">Attendify</h1>
+          <span class="text-tealAccent-400 text-xs font-semibold tracking-wider uppercase">Attendance Portal</span>
+        </div>
+      </div>
+      <nav id="faculty-nav" class="px-3 space-y-1.5 mt-1 overflow-y-auto flex-1" data-page="settings"></nav>
+    </div>
+    <div class="p-4 border-t border-brand-800/60 bg-brand-900/80 space-y-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div id="lecturer-avatar" class="w-10 h-10 shrink-0 rounded-full ring-2 ring-tealAccent-400/40 bg-brand-700 flex items-center justify-center font-bold text-white text-sm">LC</div>
+        <div class="flex-1 min-w-0">
+          <p id="lecturer-name" class="text-sm font-semibold text-white truncate">Account</p>
+          <p id="lecturer-username" class="text-xs text-slate-400 truncate">Signed in</p>
+        </div>
+      </div>
+      <button type="button" id="btn-logout" class="sidebar-logout-btn w-full py-2 rounded-lg border border-brand-700 text-xs font-semibold text-slate-300 hover:text-white hover:bg-brand-800 transition">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[#f1f5f9]">
+    <header class="faculty-topbar h-14 bg-white border-b border-slate-200 px-4 sm:px-6 shrink-0">
+      <p class="text-base font-black text-brand-900 leading-tight">Settings</p>
+    </header>
+
+    <div class="flex-1 overflow-y-auto px-4 py-10 sm:py-14">
+      <div class="settings-simple-wrap mx-auto w-full max-w-md">
+        <h2 class="text-3xl font-extrabold text-brand-900 tracking-tight">Settings</h2>
+        <p class="text-sm text-slate-500 mt-1 mb-6">Manage your Attendify account and programmes.</p>
+
+        <p id="settings-setup-hint" class="hidden text-sm text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2.5 mb-4">
+          You can update your details here. Add or change programmes when you are ready, then save.
+        </p>
+
+        <article class="settings-simple-card">
+          <h3 class="text-lg font-bold text-brand-900 text-center border-b border-slate-100 pb-4">My information</h3>
+
+          <div class="pt-6 pb-2 flex justify-center">
+            <div id="settings-profile-avatar" class="settings-simple-photo w-[7.5rem] h-[7.5rem] rounded-full overflow-hidden bg-brand-100 ring-[3px] ring-tealAccent-200 shadow-sm flex items-center justify-center"></div>
+          </div>
+
+          <div id="profile-view" class="settings-simple-fields mt-4">
+            <div class="settings-simple-row">
+              <p class="settings-simple-label">Display name</p>
+              <p id="view-full-name" class="settings-simple-value">—</p>
+            </div>
+            <div class="settings-simple-row">
+              <p class="settings-simple-label">Username</p>
+              <p id="view-username" class="settings-simple-value">—</p>
+            </div>
+            <div class="settings-simple-row">
+              <p class="settings-simple-label">Role</p>
+              <p class="settings-simple-value">Lecturer</p>
+            </div>
+            <div class="settings-simple-row">
+              <p class="settings-simple-label">Password</p>
+              <p class="settings-simple-value tracking-widest text-slate-600">••••••••••</p>
+              <p class="text-[11px] text-slate-400 mt-1.5">Tap Edit to change your password.</p>
+            </div>
+            <div class="settings-simple-row border-b-0">
+              <p class="settings-simple-label">Programmes</p>
+              <div id="programme-selected-summary" class="settings-simple-value text-sm font-normal text-slate-700 leading-relaxed">—</div>
+            </div>
+          </div>
+
+          <form id="profile-form" class="hidden settings-simple-fields mt-2 space-y-3">
+            <input type="file" id="profile-photo-file" accept="image/jpeg,image/png,image/webp" class="sr-only" />
+            <div class="text-center space-y-2 py-2">
+              <button type="button" id="btn-profile-photo" class="text-xs font-bold text-brand-800 hover:underline">Change photo</button>
+              <span class="text-slate-300">·</span>
+              <button type="button" id="btn-profile-photo-remove" class="text-xs font-semibold text-slate-500 hover:text-rose-600">Remove</button>
+              <p id="profile-photo-error" class="hidden text-[11px] text-rose-600 font-medium"></p>
+            </div>
+
+            <div>
+              <label for="edit-full-name" class="settings-simple-label">Display name</label>
+              <input id="edit-full-name" type="text" class="settings-simple-input mt-1" autocomplete="name">
+            </div>
+            <div>
+              <label for="edit-username" class="settings-simple-label">Username</label>
+              <input id="edit-username" type="text" class="settings-simple-input mt-1 font-mono" autocomplete="username">
+            </div>
+            <div>
+              <label for="edit-current-password" class="settings-simple-label">Current password</label>
+              <input id="edit-current-password" type="password" class="settings-simple-input mt-1" autocomplete="current-password" placeholder="Required to set a new password">
+            </div>
+            <div>
+              <label for="edit-new-password" class="settings-simple-label">New password</label>
+              <input id="edit-new-password" type="password" class="settings-simple-input mt-1" autocomplete="new-password" placeholder="Optional">
+            </div>
+
+            <div id="programme-picker-panel" class="pt-2 space-y-3">
+              <p class="settings-simple-label">Programmes &amp; levels you teach</p>
+              <p class="text-[11px] text-slate-500">Pick a programme and level, then tap Add. Repeat for each class you handle.</p>
+              <label class="block">
+                <span class="settings-simple-label">Programme</span>
+                <div id="settings-programme-combo" class="auth-programme-combo mt-1">
+                  <button type="button" id="settings-programme-trigger" class="auth-programme-trigger" aria-expanded="false" aria-controls="settings-programme-panel">
+                    <span id="settings-programme-trigger-label" class="auth-programme-trigger-label text-slate-400">Choose programme</span>
+                    <svg class="auth-programme-chevron w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </button>
+                  <div id="settings-programme-panel" class="auth-programme-panel" hidden>
+                    <div class="auth-programme-search-wrap">
+                      <input id="settings-programme-search" type="search" placeholder="Search programmes…" autocomplete="off"
+                        class="auth-programme-combo-search w-full bg-transparent text-sm focus:outline-none" aria-label="Search programmes">
+                    </div>
+                    <div id="settings-programme-list" class="auth-programme-list" role="listbox" aria-label="Programmes">
+                      <p class="auth-programme-empty">Loading programmes…</p>
+                    </div>
+                  </div>
+                  <input type="hidden" id="pick-programme" value="">
+                </div>
+              </label>
+              <label class="block">
+                <span class="settings-simple-label">Level</span>
+                <select id="pick-level" class="settings-simple-input mt-1 text-sm">
+                  <option value="" disabled selected>Choose level</option>
+                </select>
+              </label>
+              <button type="button" id="btn-add-assignment" class="w-full py-2 rounded-lg bg-brand-100 text-brand-900 text-xs font-bold hover:bg-brand-200 border border-brand-200">Add programme</button>
+              <ul id="assignment-draft-list" class="settings-assignment-list text-sm text-slate-700 space-y-1 min-h-[3rem]"></ul>
+              <p id="programme-catalogue-empty" class="hidden text-xs text-rose-600"></p>
+            </div>
+
+            <div class="flex gap-2 pt-3">
+              <button type="button" id="btn-cancel-edit" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="submit" class="flex-1 py-2.5 rounded-xl bg-brand-900 text-white text-sm font-bold hover:bg-brand-800">Save</button>
+            </div>
+          </form>
+
+          <p id="profile-error" class="hidden text-xs text-rose-600 font-medium mt-3 text-center"></p>
+          <p id="profile-success" class="hidden text-xs text-teal-700 font-medium mt-3 text-center"></p>
+        </article>
+
+        <button type="button" id="btn-edit-profile" class="settings-simple-edit-btn mt-4 w-full max-w-md mx-auto block py-3 rounded-xl bg-brand-900 text-white text-sm font-bold hover:bg-brand-800 transition shadow-sm">
+          Edit
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/store.js?v=23"></script>
+  <script src="js/auth-guard.js?v=1"></script>
+  <script src="js/sidebar.js?v=15"></script>
+  <script src="js/settings.js?v=11"></script>
+</body>
+</html>

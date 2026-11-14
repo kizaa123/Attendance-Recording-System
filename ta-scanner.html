@@ -186,7 +186,8 @@
       document.write('<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"><\/script>');
     }
   </script>
-  <script src="js/store.js?v=18"></script>
+  <script src="js/store.js?v=20"></script>
+  <script src="js/scanner-hud.js?v=5"></script>
   <script>
   (function () {
     "use strict";
@@ -271,6 +272,16 @@
     // ─── Init ─────────────────────────────────────────────────────────────────
     var params = new URLSearchParams(window.location.search);
     taToken = params.get("token") || "";
+    if (!taToken) {
+      var scanPath = String(window.location.pathname || "").match(/\/scan\/([^/]+)\/?$/i);
+      if (scanPath) {
+        try {
+          taToken = decodeURIComponent(scanPath[1]);
+        } catch (_) {
+          taToken = scanPath[1];
+        }
+      }
+    }
 
     if (!taToken) {
       showError("No access token found. Use the link shared by the lecturer.");
@@ -278,14 +289,23 @@
     }
 
     // Resolve server origin or use current window location
+    function isLoopbackHost(name) {
+      var h = String(name || "").toLowerCase();
+      return h === "localhost" || h === "127.0.0.1" || h === "[::1]";
+    }
     apiBase = window.location.origin;
-    fetch("/api/host").then(function (r) { return r.json(); }).then(function (h) {
-      if (h && h.origin && window.location.hostname === "localhost") {
-        apiBase = h.origin;
-      }
-    }).catch(function () {}).finally(function () {
-      loadSession();
-    });
+    fetch("/api/host")
+      .then(function (r) { return r.json(); })
+      .then(function (h) {
+        if (!h) return;
+        if (h.publicOrigin) apiBase = h.publicOrigin.replace(/\/$/, "");
+        else if (h.requestOrigin) apiBase = h.requestOrigin.replace(/\/$/, "");
+        else if (h.origin && isLoopbackHost(window.location.hostname)) apiBase = String(h.origin).replace(/\/$/, "");
+      })
+      .catch(function () {})
+      .finally(function () {
+        loadSession();
+      });
 
     function loadSession() {
       fetch(apiUrl("/api/ta/" + encodeURIComponent(taToken)))
@@ -497,9 +517,17 @@
       return null;
     }
 
+    function playTone(kind) {
+      if (!window.AttendifyScannerHud) return;
+      if (kind === "ok" && AttendifyScannerHud.playSuccess) AttendifyScannerHud.playSuccess();
+      else if (kind === "dup" && AttendifyScannerHud.playDuplicate) AttendifyScannerHud.playDuplicate();
+      else if (kind === "err" && AttendifyScannerHud.playError) AttendifyScannerHud.playError();
+    }
+
     function handleScanResult(result) {
       if (!result.ok) {
         var msg = result.message || result.error || "Could not mark attendance.";
+        playTone("err");
         if (result.error === "session_closed") {
           showSessionClosed();
           return;
@@ -509,6 +537,7 @@
       }
       var student = result.student;
       var isDup = result.duplicate;
+      playTone(isDup ? "dup" : "ok");
       showVerified(student, result.record.scannedAt, isDup);
 
       if (!isDup) {

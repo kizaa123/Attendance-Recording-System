@@ -5,7 +5,8 @@ const path = require("path");
 const db = require("./db");
 const os = require("os");
 
-const PORT = Number(process.env.ATTENDIFY_PORT) || 3000;
+/** Render and most hosts set PORT; ATTENDIFY_PORT overrides for local scripts */
+const PORT = Number(process.env.PORT || process.env.ATTENDIFY_PORT) || 3000;
 const HTTPS_PORT = Number(process.env.ATTENDIFY_HTTPS_PORT) || 3443;
 /** Bind dual-stack so http://localhost (IPv6) and http://127.0.0.1 both hit this app — not a second process on :: only. */
 const HOST = process.env.ATTENDIFY_HOST || "::";
@@ -40,7 +41,7 @@ function sendJson(res, status, body, extraHeaders) {
       "Cache-Control": "no-store",
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, PUT, POST, PATCH, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type"
+      "Access-Control-Allow-Headers": "Content-Type, X-Attendify-Token, Authorization"
     },
     extraHeaders || {}
   );
@@ -90,6 +91,74 @@ try {
   process.exit(1);
 }
 
+function readCookieToken(req) {
+  const cookie = String(req.headers.cookie || "");
+  const match = cookie.match(/(?:^|;\s*)attendify_token=([^;]+)/);
+  if (!match) return "";
+  try {
+    return decodeURIComponent(match[1].trim());
+  } catch (_) {
+    return match[1].trim();
+  }
+}
+
+function readAuthToken(req) {
+  const headerToken = String(req.headers["x-attendify-token"] || "").trim();
+  if (headerToken) return headerToken;
+  const auth = String(req.headers.authorization || "").trim();
+  if (auth.toLowerCase().indexOf("bearer ") === 0) return auth.slice(7).trim();
+  return readCookieToken(req);
+}
+
+function sessionCookieHeader(token, maxAgeSec) {
+  const age = maxAgeSec != null ? maxAgeSec : 12 * 60 * 60;
+  if (!token) {
+    return "attendify_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+  }
+  return (
+    "attendify_token=" +
+    encodeURIComponent(token) +
+    "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" +
+    age
+  );
+}
+
+function requireFacultyAuth(req, res) {
+  const auth = db.validateLecturerSession(readAuthToken(req));
+  if (!auth.ok) {
+    sendJson(res, 401, { ok: false, error: auth.error || "Please sign in.", code: "AUTH_REQUIRED" });
+    return null;
+  }
+  return auth;
+}
+
+function isPublicApi(pathname, method) {
+  if (pathname === "/api/host" && method === "GET") return true;
+  if (pathname === "/api/ucc-programmes" && method === "GET") return true;
+  if (pathname === "/api/ucc-programmes/roster-preview" && method === "GET") return true;
+  if (pathname === "/api/auth/login" && method === "POST") return true;
+  if (pathname === "/api/auth/signup" && method === "POST") return true;
+  if (pathname === "/api/auth/logout" && method === "POST") return true;
+  if (pathname === "/api/auth/me" && method === "GET") return true;
+  if (pathname === "/api/state" && method === "GET") return true;
+  if (pathname === "/api/students" && method === "POST") return true;
+  if (pathname === "/api/attendance" && method === "POST") return true;
+  if (pathname.indexOf("/api/ta/") === 0 && method === "GET") return true;
+  return false;
+}
+
+function isFacultyHtmlPage(pathname) {
+  const name = String(pathname || "").toLowerCase().replace(/^\//, "");
+  return (
+    name === "dashboard.html" ||
+    name === "course.html" ||
+    name === "programme.html" ||
+    name === "reports.html" ||
+    name === "settings.html" ||
+    name === "index.html"
+  );
+}
+
 function handleRequest(req, res) {
   const isHttps = !!(req.socket && req.socket.encrypted);
   const currentPort = isHttps ? HTTPS_PORT : PORT;
@@ -99,13 +168,29 @@ function handleRequest(req, res) {
     sendJson(res, 204, {});
     return;
   }
+  if (url.pathname.indexOf("/api/") === 0 && !isPublicApi(url.pathname, req.method)) {
+    const auth = requireFacultyAuth(req, res);
+    if (!auth) return;
+    req.attendifyAuth = auth;
+  }
   if (url.pathname === "/api/host") {
     const lanIp = getNetworkIp();
     const hasHttps = fs.existsSync(pfxFile);
+    const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+      .split(",")[0]
+      .trim();
+    const forwardedHost = String(req.headers["x-forwarded-host"] || req.headers.host || "").trim();
+    const reqProto = forwardedProto || (isHttps ? "https:" : "http:");
+    const reqOrigin = forwardedHost ? reqProto + "//" + forwardedHost : protocol + "//localhost:" + PORT;
+    const envPublic = String(process.env.ATTENDIFY_PUBLIC_ORIGIN || process.env.RENDER_EXTERNAL_URL || "")
+      .replace(/\/$/, "");
+    const publicOrigin = envPublic || reqOrigin;
     sendJson(res, 200, {
       origin: "http://" + lanIp + ":" + PORT,
       httpsOrigin: hasHttps ? "https://" + lanIp + ":" + HTTPS_PORT : null,
       localOrigin: "http://localhost:" + PORT,
+      publicOrigin: publicOrigin,
+      requestOrigin: reqOrigin,
       lanIp: lanIp,
       port: PORT,
       httpsPort: hasHttps ? HTTPS_PORT : null
@@ -113,7 +198,14 @@ function handleRequest(req, res) {
     return;
   }
   if (url.pathname === "/api/state" && req.method === "GET") {
-    sendJson(res, 200, db.loadState());
+    const tokenAuth = db.validateLecturerSession(readAuthToken(req));
+    if (tokenAuth.ok) {
+      const lecturerId = tokenAuth.lecturerId;
+      const scoped = lecturerId && String(lecturerId).indexOf("demo-") !== 0;
+      sendJson(res, 200, db.loadState(scoped ? { lecturerId: lecturerId } : {}));
+      return;
+    }
+    sendJson(res, 200, db.publicState());
     return;
   }
   if (url.pathname === "/api/state" && req.method === "PUT") {
@@ -128,8 +220,113 @@ function handleRequest(req, res) {
     }).catch(function () { sendJson(res, 400, { ok: false, error: "Could not save the roster." }); });
     return;
   }
+  if (url.pathname === "/api/ucc-programmes" && req.method === "GET") {
+    sendJson(res, 200, { ok: true, programmes: db.listUccProgrammes() });
+    return;
+  }
+  if (url.pathname === "/api/ucc-programmes/roster-preview" && req.method === "GET") {
+    sendJson(
+      res,
+      200,
+      db.rosterPreviewByUccProgramme(url.searchParams.get("uccProgrammeId"), url.searchParams.get("level"))
+    );
+    return;
+  }
+  if (url.pathname === "/api/auth/signup" && req.method === "POST") {
+    readBody(req)
+      .then(function (body) {
+        const result = runApi(db.signupLecturer)(body || {});
+        const headers = result && result.ok && result.token ? { "Set-Cookie": sessionCookieHeader(result.token) } : {};
+        sendJson(res, 200, result, headers);
+      })
+      .catch(function () {
+        sendJson(res, 400, { ok: false, error: "Could not create your account." });
+      });
+    return;
+  }
+  if (url.pathname === "/api/auth/login" && req.method === "POST") {
+    readBody(req)
+      .then(function (body) {
+        const result = runApi(db.loginLecturer)(body || {});
+        const headers = result && result.ok && result.token ? { "Set-Cookie": sessionCookieHeader(result.token) } : {};
+        sendJson(res, 200, result, headers);
+      })
+      .catch(function () {
+        sendJson(res, 400, { ok: false, error: "Could not sign in." });
+      });
+    return;
+  }
+  if (url.pathname === "/api/auth/logout" && req.method === "POST") {
+    db.destroyLecturerSession(readAuthToken(req));
+    sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookieHeader("") });
+    return;
+  }
+  if (url.pathname === "/api/auth/me" && req.method === "GET") {
+    const me = db.validateLecturerSession(readAuthToken(req));
+    if (!me.ok) {
+      sendJson(res, 401, { ok: false, error: me.error || "Not signed in.", code: "AUTH_REQUIRED" });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      lecturer: me.lecturer,
+      token: me.token,
+      expiresAt: me.expiresAt,
+      programmeIds:
+        String(me.lecturerId).indexOf("demo-") === 0
+          ? (db.loadState().classes || []).map(function (c) {
+              return c.id;
+            })
+          : db.loadState({ lecturerId: me.lecturerId }).classes.map(function (c) {
+              return c.id;
+            })
+    });
+    return;
+  }
+  if (url.pathname === "/api/auth/programmes" && req.method === "GET") {
+    const me = db.validateLecturerSession(readAuthToken(req));
+    if (!me.ok) {
+      sendJson(res, 401, { ok: false, error: me.error || "Not signed in.", code: "AUTH_REQUIRED" });
+      return;
+    }
+    if (String(me.lecturerId).indexOf("demo-") === 0) {
+      sendJson(res, 200, {
+        ok: true,
+        programmes: db.listUccProgrammes().map(function (p) {
+          return Object.assign({}, p, { selected: true, studentCount: 0, sharedRoster: false, classId: "" });
+        })
+      });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      programmes: db.lecturerProgrammeCatalogue(me.lecturerId),
+      assignments: db.lecturerAssignmentsForApi(me.lecturerId)
+    });
+    return;
+  }
+  if (url.pathname === "/api/auth/profile" && req.method === "PATCH") {
+    readBody(req)
+      .then(function (body) {
+        body = body || {};
+        if (req.attendifyAuth && req.attendifyAuth.lecturerId) {
+          body.lecturerId = req.attendifyAuth.lecturerId;
+        }
+        sendJson(res, 200, runApi(db.updateLecturerProfile)(body));
+      })
+      .catch(function () {
+        sendJson(res, 400, { ok: false, error: "Could not update your profile." });
+      });
+    return;
+  }
   if (url.pathname === "/api/classes" && req.method === "POST") {
-    readBody(req).then(function (body) { sendJson(res, 200, runApi(db.addClass)(body || {})); })
+    readBody(req).then(function (body) {
+      body = body || {};
+      if (req.attendifyAuth && req.attendifyAuth.lecturerId) {
+        body.lecturerId = req.attendifyAuth.lecturerId;
+      }
+      sendJson(res, 200, runApi(db.addClass)(body));
+    })
       .catch(function () { sendJson(res, 400, { ok: false, error: "Could not create the programme." }); });
     return;
   }
@@ -153,6 +350,31 @@ function handleRequest(req, res) {
       return;
     }
   }
+  var courseIdMatch = url.pathname.match(/^\/api\/courses\/([^/]+)\/?$/);
+  if (courseIdMatch && (req.method === "PATCH" || req.method === "PUT" || req.method === "DELETE")) {
+    var cid = decodeURIComponent(courseIdMatch[1]);
+    if (req.method === "DELETE") {
+      var delBody = { courseId: cid };
+      if (req.attendifyAuth && req.attendifyAuth.lecturerId) {
+        delBody.lecturerId = req.attendifyAuth.lecturerId;
+      }
+      sendJson(res, 200, runApi(db.deleteProgrammeCourse)(delBody));
+      return;
+    }
+    readBody(req)
+      .then(function (body) {
+        body = body || {};
+        body.courseId = body.courseId || body.id || cid;
+        if (req.attendifyAuth && req.attendifyAuth.lecturerId) {
+          body.lecturerId = req.attendifyAuth.lecturerId;
+        }
+        sendJson(res, 200, runApi(db.updateProgrammeCourse)(body));
+      })
+      .catch(function () {
+        sendJson(res, 400, { ok: false, error: "Could not update the course." });
+      });
+    return;
+  }
   var programmeCoursesMatch = url.pathname.match(/^\/api\/classes\/([^/]+)\/courses\/?$/);
   if (programmeCoursesMatch && req.method === "POST") {
     var programmeId = decodeURIComponent(programmeCoursesMatch[1]);
@@ -160,6 +382,9 @@ function handleRequest(req, res) {
       .then(function (body) {
         body = body || {};
         body.classId = body.classId || programmeId;
+        if (req.attendifyAuth && req.attendifyAuth.lecturerId) {
+          body.lecturerId = req.attendifyAuth.lecturerId;
+        }
         sendJson(res, 200, runApi(db.addProgrammeCourse)(body));
       })
       .catch(function () {
@@ -172,6 +397,16 @@ function handleRequest(req, res) {
       .catch(function () { sendJson(res, 400, { ok: false, error: "Could not save the student." }); });
     return;
   }
+  var studentIdMatch = url.pathname.match(/^\/api\/students\/([^/]+)\/?$/);
+  if (studentIdMatch && req.method === "DELETE") {
+    var studentId = decodeURIComponent(studentIdMatch[1]);
+    var delStudentBody = { id: studentId };
+    if (req.attendifyAuth && req.attendifyAuth.lecturerId) {
+      delStudentBody.lecturerId = req.attendifyAuth.lecturerId;
+    }
+    sendJson(res, 200, runApi(db.deleteStudent)(delStudentBody));
+    return;
+  }
   if (url.pathname === "/api/attendance" && req.method === "POST") {
     readBody(req).then(function (body) {
       sendJson(res, 200, db.markPresent(body || {}));
@@ -182,7 +417,11 @@ function handleRequest(req, res) {
     readBody(req)
       .then(function (body) {
         try {
-          sendJson(res, 200, db.removeAttendanceRecord(body || {}));
+          body = body || {};
+          if (req.attendifyAuth && req.attendifyAuth.lecturerId) {
+            body.lecturerId = req.attendifyAuth.lecturerId;
+          }
+          sendJson(res, 200, db.removeAttendanceRecord(body));
         } catch (error) {
           sendJson(res, 200, { ok: false, error: error.message || "Could not undo." });
         }
@@ -201,7 +440,11 @@ function handleRequest(req, res) {
     readBody(req)
       .then(function (body) {
         try {
-          sendJson(res, 200, db.startAttendanceSession(body || {}));
+          body = body || {};
+          if (req.attendifyAuth && req.attendifyAuth.lecturerId) {
+            body.lecturerId = req.attendifyAuth.lecturerId;
+          }
+          sendJson(res, 200, db.startAttendanceSession(body));
         } catch (error) {
           sendJson(res, 200, { ok: false, error: error.message || "Could not start attendance session." });
         }
@@ -215,7 +458,11 @@ function handleRequest(req, res) {
     readBody(req)
       .then(function (body) {
         try {
-          sendJson(res, 200, db.closeAttendanceSession(body || {}));
+          body = body || {};
+          if (req.attendifyAuth && req.attendifyAuth.lecturerId) {
+            body.lecturerId = req.attendifyAuth.lecturerId;
+          }
+          sendJson(res, 200, db.closeAttendanceSession(body));
         } catch (error) {
           sendJson(res, 200, { ok: false, error: error.message || "Could not end attendance session." });
         }
@@ -247,7 +494,36 @@ function handleRequest(req, res) {
   }
 
   let rel = decodeURIComponent(url.pathname);
-  if (rel === "/") rel = "/dashboard.html";
+  if (rel === "/") rel = "/login.html";
+
+  const joinMatch = rel.match(/^\/join\/([^/]+)\/?$/i);
+  if (joinMatch) {
+    rel = "/enroll.html";
+  }
+  const scanMatch = rel.match(/^\/scan\/([^/]+)\/?$/i);
+  if (scanMatch) {
+    rel = "/ta-scanner.html";
+  }
+
+  if (isFacultyHtmlPage(rel)) {
+    const pageAuth = db.validateLecturerSession(readAuthToken(req));
+    if (!pageAuth.ok) {
+      const nextPage = rel === "/index.html" ? "dashboard.html" : rel.replace(/^\//, "");
+      const next = encodeURIComponent(nextPage + (url.search || ""));
+      res.writeHead(302, {
+        Location: "/login.html?next=" + next,
+        "Cache-Control": "no-store"
+      });
+      res.end();
+      return;
+    }
+    if (rel === "/index.html") {
+      res.writeHead(302, { Location: "/dashboard.html", "Cache-Control": "no-store" });
+      res.end();
+      return;
+    }
+  }
+
   const file = path.resolve(root, "." + rel);
   if (!file.toLowerCase().startsWith(path.resolve(root).toLowerCase())) {
     res.writeHead(403);
@@ -260,7 +536,11 @@ function handleRequest(req, res) {
       res.end("not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": types[path.extname(file)] || "application/octet-stream" });
+    const headers = {
+      "Content-Type": types[path.extname(file)] || "application/octet-stream",
+      "Cache-Control": path.extname(file) === ".html" ? "no-store" : "public, max-age=300"
+    };
+    res.writeHead(200, headers);
     res.end(data);
   });
 }

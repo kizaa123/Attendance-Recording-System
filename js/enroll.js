@@ -44,6 +44,7 @@ document.getElementById("enroll-form").addEventListener("submit", function (even
     classId: classId,
     name: document.getElementById("name").value,
     index: index,
+    level: document.getElementById("student-level").value,
     email: document.getElementById("email").value,
     photo: photo,
     source: "link"

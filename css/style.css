@@ -2,6 +2,156 @@ body {
   font-family: "Plus Jakarta Sans", sans-serif;
 }
 
+/* —— Faculty layout: mobile sidebar —— */
+.faculty-sidebar {
+  width: 16rem;
+}
+
+.faculty-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.faculty-sidebar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border-radius: 0.65rem;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f4c4a;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.faculty-sidebar-toggle:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.faculty-sidebar-toggle-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.faculty-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+@media (max-width: 1023px) {
+  .faculty-sidebar-toggle {
+    display: inline-flex;
+  }
+
+  .faculty-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    max-width: min(16.5rem, 88vw);
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+  }
+
+  body.faculty-sidebar-open .faculty-sidebar {
+    transform: translateX(0);
+  }
+}
+
+/* —— Dashboard: compact cards on small screens —— */
+#dashboard-class-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}
+
+@media (min-width: 640px) {
+  #dashboard-class-cards {
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+    gap: 0.85rem;
+  }
+}
+
+.dashboard-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+@media (min-width: 1280px) {
+  .dashboard-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+.dashboard-stat-card {
+  padding: 0.75rem;
+  border-radius: 1rem;
+}
+
+.dashboard-stat-card .dashboard-stat-value {
+  font-size: 1.5rem;
+  margin-top: 0.35rem;
+}
+
+.dashboard-stat-card .dashboard-stat-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+}
+
+.dashboard-stat-card .dashboard-stat-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+@media (min-width: 640px) {
+  .dashboard-stat-card {
+    padding: 1.1rem;
+    border-radius: 1.25rem;
+  }
+
+  .dashboard-stat-card .dashboard-stat-value {
+    font-size: 1.875rem;
+    margin-top: 0.5rem;
+  }
+
+  .dashboard-stat-card .dashboard-stat-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+  }
+
+  .dashboard-stat-card .dashboard-stat-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
+.dashboard-prog-card {
+  padding: 0.625rem;
+  border-radius: 0.65rem;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .dashboard-prog-card {
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    gap: 0.625rem;
+  }
+}
+
 .avatar-slot .avatar-spinner,
 .avatar-spinner {
   position: absolute;
@@ -54,17 +204,66 @@ body {
   border-radius: 1.25rem;
   overflow: hidden;
   background: #0f172a;
+  width: 100%;
+  max-width: 26rem;
+  margin-left: auto;
+  margin-right: auto;
+  aspect-ratio: 4 / 3;
   min-height: 220px;
+  max-height: min(46vh, 380px);
 }
 
 .scan-camera-shell #qr-reader,
+.scan-camera-shell #ta-qr-reader {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+}
+
+.scan-camera-shell #qr-reader > div,
+.scan-camera-shell #ta-qr-reader > div {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
 .scan-camera-shell #qr-reader video,
-.scan-camera-shell #ta-qr-reader,
 .scan-camera-shell #ta-qr-reader video {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
   border: none !important;
+  display: block !important;
+}
+
+@media (min-width: 768px) {
+  .scanner-dialog {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .scanner-layout-present > div {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .scanner-layout-camera .scan-camera-shell {
+    aspect-ratio: 4 / 3;
+    min-height: 240px;
+    max-height: min(48vh, 420px);
+    max-width: 24rem;
+  }
+
+  .scan-present-list {
+    max-height: none !important;
+  }
 }
 
 .scan-camera-shell #qr-reader img,
@@ -72,20 +271,37 @@ body {
   display: none !important;
 }
 
-.scan-corner {
+/* Large green scan frame (matches qrbox ~94% of viewfinder) */
+.scan-frame-guide {
   position: absolute;
-  width: 32px;
-  height: 32px;
-  border-color: rgba(45, 212, 191, 0.9);
-  border-style: solid;
-  z-index: 5;
+  inset: 8%;
+  z-index: 6;
   pointer-events: none;
+  border: 3px solid #4ade80;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 9999px rgba(15, 23, 42, 0.35),
+    0 0 18px rgba(74, 222, 128, 0.4);
+  animation: scanFramePulse 2.4s ease-in-out infinite;
 }
 
-.scan-corner-tl { top: 10%; left: 8%; border-width: 3.5px 0 0 3.5px; border-radius: 6px 0 0 0; }
-.scan-corner-tr { top: 10%; right: 8%; border-width: 3.5px 3.5px 0 0; border-radius: 0 6px 0 0; }
-.scan-corner-bl { bottom: 12%; left: 8%; border-width: 0 0 3.5px 3.5px; border-radius: 0 0 0 6px; }
-.scan-corner-br { bottom: 12%; right: 8%; border-width: 0 3.5px 3.5px 0; border-radius: 0 0 6px 0; }
+@keyframes scanFramePulse {
+  0%, 100% { border-color: #4ade80; box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.4), 0 0 22px rgba(74, 222, 128, 0.4); }
+  50% { border-color: #86efac; box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.36), 0 0 36px rgba(134, 239, 172, 0.65); }
+}
+
+/* Html5Qrcode corner locks — bright green, larger */
+.scan-camera-shell [id$="__scan_region"] > div {
+  background-color: #4ade80 !important;
+}
+
+.scan-camera-shell [id$="__scan_region"] img[alt="Info icon"] {
+  display: none !important;
+}
+
+.scan-corner {
+  display: none;
+}
 
 .scan-camera-label {
   position: absolute;
@@ -103,4 +319,312 @@ body {
   max-width: 90%;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.settings-simple-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.25rem;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+  padding: 1.75rem 1.5rem 1.5rem;
+}
+
+.settings-simple-row {
+  padding: 1rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.settings-simple-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 0.35rem;
+}
+
+.settings-simple-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.settings-simple-input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.875rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  background: #fff;
+  color: #0f172a;
+}
+
+.settings-simple-input:focus {
+  outline: none;
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+}
+
+.settings-simple-edit-btn {
+  letter-spacing: 0.02em;
+}
+
+.settings-programme-list {
+  max-height: 14rem;
+  min-height: 6rem;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.65rem;
+  background: #fafafa;
+}
+
+.settings-programme-list--compact {
+  max-height: 12rem;
+}
+
+.settings-assignment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-programme-select {
+  font-weight: 600;
+}
+
+.settings-programme-preview {
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.375rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.settings-programme-preview .prog-code {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: #0f4c4a;
+}
+
+.settings-assignment-label {
+  display: block;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.settings-assignment-label .prog-code {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: #0f4c4a;
+}
+
+.settings-prog-summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.settings-prog-summary-item {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.settings-prog-summary-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.settings-prog-summary .prog-code,
+.settings-prog-card .prog-code {
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  font-size: 0.6875rem;
+  color: #0f766e;
+}
+
+/* —— Student roster tables: scan-style cards on mobile —— */
+.scan-present-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+}
+
+.scan-present-list .scan-present-card {
+  margin: 0;
+}
+
+@media (max-width: 767px) {
+  .scan-footer-btn {
+    padding: 0.5rem 0.65rem;
+    border-radius: 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+}
+
+@media (min-width: 768px) {
+  .scan-footer-btn {
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+}
+
+.student-roster-icon-btn:hover {
+  color: #0f766e;
+  background: #f0fdfa;
+}
+
+.student-roster-table--report .student-roster-extra {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .student-roster-table tr.student-roster-row {
+    display: table-row;
+  }
+
+  .student-roster-table tbody {
+    display: table-row-group;
+    padding: 0;
+    gap: 0;
+  }
+
+  .student-roster-table td {
+    display: table-cell !important;
+  }
+
+  .student-roster-row {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border-width: 0;
+  }
+
+  .student-roster-mobile-only {
+    display: none !important;
+  }
+
+  .student-roster-table--report .student-roster-extra {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .student-roster-table thead {
+    display: none;
+  }
+
+  .student-roster-table,
+  .student-roster-table tbody,
+  .student-roster-table tr.student-roster-row,
+  .student-roster-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .student-roster-table tbody {
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .student-roster-row {
+    padding: 0.55rem 0.65rem;
+    border-radius: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+  }
+
+  .student-roster-row td {
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  .student-roster-num,
+  .student-roster-index,
+  .student-roster-level,
+  .student-roster-status-col,
+  .student-roster-time-col,
+  .student-roster-col-index,
+  .student-roster-col-level,
+  .student-roster-col-course,
+  .student-roster-col-week {
+    display: none !important;
+  }
+
+  .student-roster-main {
+    margin-bottom: 0.35rem;
+  }
+
+  .student-roster-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    margin-top: 0.15rem;
+  }
+
+  .student-roster-table--attendance .student-roster-status-col {
+    display: block !important;
+    margin-top: 0.25rem;
+  }
+
+  .student-roster-table--attendance .student-roster-time-col {
+    display: none !important;
+  }
+
+  .student-roster-table--report .student-roster-extra {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.6875rem;
+    color: #64748b;
+    line-height: 1.4;
+  }
+
+  .student-roster-table--report .student-roster-report-status {
+    margin-top: 0.35rem;
+  }
+
+  .student-roster-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.625rem;
+    height: 1.625rem;
+    padding: 0;
+    border-radius: 0.5rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: #64748b;
+  }
+
+  .student-roster-icon-btn svg {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+
+  .scan-present-badge {
+    font-size: 0.5625rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.375rem;
+  }
+
+  .scan-present-remove {
+    width: 1.625rem;
+    height: 1.625rem;
+    font-size: 0.875rem;
+  }
 }

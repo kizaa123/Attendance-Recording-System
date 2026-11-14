@@ -6,10 +6,12 @@ var activeLectureTitle = "";
 var activeWeek = null;
 var activeCourseId = "";
 var activeSessionId = null;
+var activeTeachLevel = "";
 var scanner = null;
 var lastCode = "";
 var lastScanAt = 0;
 var cameraFacing = "environment";
+var cameraStarting = false;
 
 function esc(value) {
   return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
@@ -37,9 +39,29 @@ function renderLive() {
 
 function handleScanResult(result) {
   if (!result.ok) {
-    var msg = result.message || result.error || "This card is not on the programme roster.";
-    if (result.error === "session_closed") closeScannerModal();
-    window.alert(msg);
+    if (
+      window.AttendifyScannerHud &&
+      AttendifyScannerHud.isUnregisteredScan &&
+      AttendifyScannerHud.isUnregisteredScan(result)
+    ) {
+      AttendifyScannerHud.showUnknown();
+      return;
+    }
+    if (result.error === "session_closed" && window.AttendifyScannerHud && AttendifyScannerHud.showScanMessage) {
+      AttendifyScannerHud.showScanMessage(
+        result.message || "Attendance for this week has ended.",
+        "warning",
+        true
+      );
+      setTimeout(closeScannerModal, 2700);
+      return;
+    }
+    var msg = result.message || result.error || "Could not record this scan.";
+    if (window.AttendifyScannerHud && AttendifyScannerHud.showScanMessage) {
+      AttendifyScannerHud.showScanMessage(msg, "error", true);
+    } else if (window.AttendifyScannerHud && AttendifyScannerHud.playError) {
+      AttendifyScannerHud.playError();
+    }
     return;
   }
   renderLive();
@@ -55,7 +77,7 @@ function handleScanResult(result) {
 
 function onScan(text) {
   var now = Date.now();
-  if (text === lastCode && now - lastScanAt < 2000) return;
+  if (text === lastCode && now - lastScanAt < 550) return;
   lastCode = text;
   lastScanAt = now;
   var parsed = Attendify.parseQr(text);
@@ -64,58 +86,131 @@ function onScan(text) {
   Attendify.markPresent(activeClassId, index, qrToken, activeLectureTitle, activeWeek).then(handleScanResult);
 }
 
-function simulateScan() {
-  var rows = Attendify.attendanceRows(activeClassId, activeLectureTitle, activeWeek);
-  var marked = {};
-  rows.forEach(function (row) {
-    marked[row.student.id] = true;
+function persistLiveScanFromDashboard() {
+  if (!Attendify.saveLiveScanSession || !activeClassId) return;
+  Attendify.saveLiveScanSession({
+    source: "dashboard",
+    classId: activeClassId,
+    courseId: activeCourseId || "",
+    weekNumber: activeWeek,
+    lectureName: activeLectureTitle,
+    sessionId: activeSessionId || null,
+    teachLevel: activeTeachLevel || "",
+    returnUrl: "dashboard.html"
   });
-  var students = Attendify.studentsFor(activeClassId);
-  if (!students.length) {
-    window.alert("No students registered on this programme yet.");
+}
+
+function submitManualIndexSuffix() {
+  var errEl = document.getElementById("manual-index-error");
+  var input = document.getElementById("manual-index-suffix");
+  if (errEl) errEl.classList.add("hidden");
+  var resolved = Attendify.resolveStudentIndexSuffix(
+    activeClassId,
+    input ? input.value : "",
+    activeTeachLevel
+  );
+  if (!resolved.ok) {
+    if (errEl) errEl.classList.add("hidden");
+    if (window.AttendifyScannerHud && AttendifyScannerHud.showUnknown) {
+      AttendifyScannerHud.showUnknown();
+    }
     return;
   }
-  var next = null;
-  var i;
-  for (i = 0; i < students.length; i++) {
-    if (!marked[students[i].id]) {
-      next = students[i];
-      break;
+  Attendify.markPresent(activeClassId, resolved.index, null, activeLectureTitle, activeWeek).then(function (result) {
+    if (result.ok && input) {
+      input.value = "";
+      input.focus();
     }
+    handleScanResult(result);
+  });
+}
+
+function hudScanMessage(text, kind, playErr) {
+  if (window.AttendifyScannerHud && AttendifyScannerHud.showScanMessage) {
+    AttendifyScannerHud.showScanMessage(text, kind || "info", playErr !== false);
   }
-  if (!next) next = students[0];
-  onScan(Attendify.qrText(next));
+}
+
+function stopCamera() {
+  var current = scanner;
+  scanner = null;
+  cameraStarting = false;
+  if (window.AttendifyScannerHud && AttendifyScannerHud.releaseCamera) {
+    return AttendifyScannerHud.releaseCamera(current, "qr-reader");
+  }
+  if (current && current.isScanning) {
+    return current
+      .stop()
+      .then(function () {
+        return current.clear();
+      })
+      .catch(function () {});
+  }
+  return Promise.resolve();
 }
 
 function startCamera() {
+  if (cameraStarting) return;
   if (typeof Html5Qrcode === "undefined") {
-    window.alert("Scanner library did not load.");
+    hudScanMessage("Scanner library did not load.", "error", true);
     return;
   }
-  var config = { fps: 10, qrbox: { width: 240, height: 240 } };
-  scanner = new Html5Qrcode("qr-reader");
-  scanner.start({ facingMode: cameraFacing }, config, onScan, function () {}).catch(function () {
-    cameraFacing = cameraFacing === "environment" ? "user" : "environment";
-    scanner = new Html5Qrcode("qr-reader");
-    return scanner.start({ facingMode: cameraFacing }, config, onScan, function () {});
-  }).catch(function () {
-    window.alert("Camera unavailable. Use Simulate scan or allow camera access.");
-  });
+  if (window.AttendifyScannerHud && AttendifyScannerHud.isCameraContextOk && !AttendifyScannerHud.isCameraContextOk()) {
+    hudScanMessage(
+      AttendifyScannerHud.cameraContextHint ? AttendifyScannerHud.cameraContextHint() : "Camera not available in this context.",
+      "warning",
+      true
+    );
+    return;
+  }
+  var Hud = window.AttendifyScannerHud;
+  if (!Hud || !Hud.startQrCamera) {
+    hudScanMessage("Scanner failed to initialize.", "error", true);
+    return;
+  }
+  cameraStarting = true;
+  var facing = cameraFacing === "environment" ? "environment" : "user";
+  stopCamera()
+    .then(function () {
+      return Hud.startQrCamera({
+        readerId: "qr-reader",
+        facing: facing,
+        onScan: onScan,
+        onScanner: function (instance) {
+          scanner = instance;
+        }
+      });
+    })
+    .then(function (result) {
+      cameraStarting = false;
+      if (result && result.facing) cameraFacing = result.facing;
+    })
+    .catch(function () {
+      cameraStarting = false;
+      scanner = null;
+      hudScanMessage(
+        Hud.cameraContextHint ? Hud.cameraContextHint() : "Camera unavailable. Use manual entry or tap ↻ to retry.",
+        "warning",
+        true
+      );
+    });
 }
 
 function flipCamera() {
   cameraFacing = cameraFacing === "environment" ? "user" : "environment";
-  stopCamera();
-  setTimeout(startCamera, 200);
+  stopCamera().then(function () {
+    setTimeout(startCamera, 120);
+  });
 }
 
-function stopCamera() {
-  if (!scanner) return;
-  var current = scanner;
-  scanner = null;
-  if (current.isScanning) {
-    current.stop().then(function () { return current.clear(); }).catch(function () {});
-  }
+function openScannerCameraAfterLayout() {
+  stopCamera().then(function () {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        startCamera();
+      });
+    });
+  });
 }
 
 function openScannerModal(classId, lectureName, options) {
@@ -130,24 +225,36 @@ function openScannerModal(classId, lectureName, options) {
       : Attendify.semesterInfo().currentWeek || 1;
   activeCourseId = options.courseId ? String(options.courseId) : "";
   activeSessionId = options.sessionId || null;
+  activeTeachLevel =
+    options.teachLevel != null && options.teachLevel !== "" ? String(options.teachLevel) : "";
   Attendify.setActiveLectureName(activeLectureTitle);
   Attendify.setActiveWeekNumber(activeWeek);
   Attendify.setActiveCourseId(activeCourseId);
   scannerTitle.textContent = activeLectureTitle + " · Week " + activeWeek;
   document.getElementById("scanner-programme-label").textContent = programme.name;
   var rosterBtn = document.getElementById("btn-view-roster");
-  if (rosterBtn) rosterBtn.href = "programme.html?programme=" + encodeURIComponent(activeClassId);
+  if (rosterBtn) {
+    var rosterUrl = "programme.html?programme=" + encodeURIComponent(activeClassId);
+    if (options.teachLevel != null && options.teachLevel !== "") {
+      rosterUrl += "&level=" + encodeURIComponent(String(options.teachLevel));
+    }
+    rosterBtn.href = rosterUrl;
+  }
   var shareBtn = document.getElementById("btn-share-access");
   if (shareBtn) shareBtn.classList.remove("hidden");
   scannerModal.classList.remove("hidden");
   AttendifyScannerHud.hideVerified();
   renderLive();
-  stopCamera();
-  setTimeout(startCamera, 200);
+  openScannerCameraAfterLayout();
 
   if (options.showShareModalImmediately) {
     setTimeout(openTaShareModal, 350);
   }
+  persistLiveScanFromDashboard();
+  var manualErr = document.getElementById("manual-index-error");
+  var manualInput = document.getElementById("manual-index-suffix");
+  if (manualErr) manualErr.classList.add("hidden");
+  if (manualInput) manualInput.value = "";
 }
 
 var currentTaShareUrl = "";
@@ -191,10 +298,16 @@ function openTaShareModal() {
       return;
     }
     currentTaShareUrl = res.url;
+    var label = res.displayUrl || (Attendify.displayShareUrl ? Attendify.displayShareUrl(res.url) : res.url);
     if (input) input.value = res.url;
     if (anchor) {
-      anchor.textContent = res.url;
+      anchor.textContent = label;
       anchor.href = res.url;
+    }
+    var openBtn = document.getElementById("ta-share-open");
+    if (openBtn) {
+      openBtn.href = res.url;
+      openBtn.classList.remove("pointer-events-none", "opacity-50");
     }
     if (qrContainer && typeof QRCode !== "undefined") {
       qrContainer.innerHTML = "";
@@ -211,19 +324,69 @@ function openTaShareModal() {
   });
 }
 
-function openStartAttendanceModal(classId) {
-  var programme = Attendify.classById(classId);
+function fillStartAttendanceCourseSelect(classId) {
+  var sel = document.getElementById("start-attendance-course");
+  var emptyMsg = document.getElementById("start-attendance-no-courses");
+  var submitBtn = document.querySelector("#start-attendance-form button[type=submit]");
+  if (!sel) return;
+  var courses = Attendify.coursesForProgramme(classId);
+  if (!courses.length) {
+    sel.innerHTML = '<option value="">No courses yet</option>';
+    sel.disabled = true;
+    if (emptyMsg) emptyMsg.classList.remove("hidden");
+    if (submitBtn) submitBtn.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  if (submitBtn) submitBtn.disabled = false;
+  if (emptyMsg) emptyMsg.classList.add("hidden");
+  sel.innerHTML =
+    '<option value="" disabled selected>Select a course</option>' +
+    courses
+      .map(function (course) {
+        return (
+          '<option value="' +
+          esc(course.id) +
+          '">' +
+          esc(course.code) +
+          " — " +
+          esc(course.name) +
+          "</option>"
+        );
+      })
+      .join("");
+}
+
+function openStartAttendanceModal(classId, teachLevel) {
+  var programme = Attendify.classById(classId, teachLevel);
   if (!programme) return;
   document.getElementById("start-programme-name").textContent = programme.name;
   document.getElementById("start-programme-code").textContent = programme.code;
-  document.getElementById("start-lecture-name").value = "";
+  var levelEl = document.getElementById("start-programme-level");
+  if (levelEl) {
+    if (programme.teachLevel != null && programme.teachLevel !== "") {
+      levelEl.textContent = " · Level " + programme.teachLevel;
+      levelEl.classList.remove("hidden");
+    } else {
+      levelEl.textContent = "";
+      levelEl.classList.add("hidden");
+    }
+  }
+  fillStartAttendanceCourseSelect(programme.id);
   var weekEl = document.getElementById("start-attendance-week");
   if (weekEl) weekEl.value = String(Attendify.semesterInfo().currentWeek || 1);
   document.getElementById("start-attendance-error").classList.add("hidden");
-  document.getElementById("startAttendanceModal").dataset.programmeId = programme.id;
-  document.getElementById("startAttendanceModal").classList.remove("hidden");
+  var modal = document.getElementById("startAttendanceModal");
+  modal.dataset.programmeId = programme.id;
+  if (programme.teachLevel != null && programme.teachLevel !== "") {
+    modal.dataset.teachLevel = String(programme.teachLevel);
+  } else {
+    delete modal.dataset.teachLevel;
+  }
+  modal.classList.remove("hidden");
+  var courseEl = document.getElementById("start-attendance-course");
   setTimeout(function () {
-    document.getElementById("start-lecture-name").focus();
+    if (courseEl && !courseEl.disabled) courseEl.focus();
   }, 100);
 }
 
@@ -246,6 +409,7 @@ function closeStartAttendanceModal() {
 function closeScannerModal() {
   stopCamera();
   scannerModal.classList.add("hidden");
+  persistLiveScanFromDashboard();
 }
 
 function defaultClassId() {
@@ -253,9 +417,12 @@ function defaultClassId() {
   return state.activeClassId || (state.classes[0] && state.classes[0].id) || "cs101";
 }
 
-document.getElementById("btn-open-scanner").addEventListener("click", function () {
-  openStartAttendanceModal(defaultClassId());
-});
+var openScannerBtn = document.getElementById("btn-open-scanner");
+if (openScannerBtn) {
+  openScannerBtn.addEventListener("click", function () {
+    openStartAttendanceModal(defaultClassId());
+  });
+}
 
 document.getElementById("start-attendance-cancel").addEventListener("click", closeStartAttendanceModal);
 document.getElementById("startAttendanceModal").addEventListener("click", function (event) {
@@ -263,79 +430,152 @@ document.getElementById("startAttendanceModal").addEventListener("click", functi
 });
 document.getElementById("start-attendance-form").addEventListener("submit", function (event) {
   event.preventDefault();
-  var lecture = document.getElementById("start-lecture-name").value.trim();
-  var week = document.getElementById("start-attendance-week").value;
+  var courseId = document.getElementById("start-attendance-course").value;
+  var week = Number(document.getElementById("start-attendance-week").value) || Attendify.semesterInfo().currentWeek || 1;
   var err = document.getElementById("start-attendance-error");
-  if (!lecture) {
-    err.textContent = "Type the course or module name for this attendance.";
+  var course = Attendify.courseById(courseId);
+  if (!courseId || !course) {
+    err.textContent = "Select a course created under this programme.";
+    err.classList.remove("hidden");
+    return;
+  }
+  if (Attendify.isCourseWeekSessionClosed && Attendify.isCourseWeekSessionClosed(modalProgrammeId(), course, week)) {
+    err.textContent = "Attendance for Week " + week + " has already ended for this course.";
     err.classList.remove("hidden");
     return;
   }
   err.classList.add("hidden");
-  var programmeId = document.getElementById("startAttendanceModal").dataset.programmeId || defaultClassId();
-  Attendify.startAttendanceSession(programmeId, lecture, { weekNumber: week }).then(function (result) {
+  var modal = document.getElementById("startAttendanceModal");
+  var programmeId = modal.dataset.programmeId || defaultClassId();
+  var teachLevel = modal.dataset.teachLevel || "";
+  Attendify.startAttendanceSession(programmeId, null, { courseId: courseId, weekNumber: week }).then(function (result) {
     if (!result.ok) {
-      err.textContent = result.message || result.error || "Could not start session.";
+      err.textContent =
+        result.message ||
+        (result.error === "session_closed"
+          ? "Attendance for this week has ended."
+          : result.error || "Could not start session.");
       err.classList.remove("hidden");
       return;
     }
     closeStartAttendanceModal();
     renderDashboard();
-    openScannerModal(programmeId, result.lectureName || lecture, {
+    openScannerModal(programmeId, result.lectureName || Attendify.courseLectureLabel(course), {
       weekNumber: week,
+      courseId: courseId,
       sessionId: result.sessionId,
+      teachLevel: teachLevel,
       showShareModalImmediately: true
     });
   });
 });
 
+function modalProgrammeId() {
+  var modal = document.getElementById("startAttendanceModal");
+  return (modal && modal.dataset.programmeId) || defaultClassId();
+}
+
 var classCardsHost = document.getElementById("dashboard-class-cards");
 if (classCardsHost) {
   classCardsHost.addEventListener("click", function (event) {
-    var menuBtn = event.target.closest("[data-action=programme-menu]");
-    if (menuBtn) {
+    var progMenuToggle = event.target.closest("[data-action=programme-menu-toggle]");
+    if (progMenuToggle) {
       event.stopPropagation();
-      var cid = menuBtn.getAttribute("data-class-id");
-      var menu = document.getElementById(cardPrefix(cid) + "-menu");
-      if (!menu) return;
-      var open = menu.classList.contains("hidden");
+      var progMenuId = progMenuToggle.getAttribute("data-menu-id");
+      var progPanel = progMenuId ? document.getElementById(progMenuId) : null;
+      if (!progPanel) return;
+      var progWillOpen = progPanel.classList.contains("hidden");
       closeAllProgrammeMenus();
-      if (open) menu.classList.remove("hidden");
+      closeAllCourseMenus();
+      if (progWillOpen) progPanel.classList.remove("hidden");
       return;
     }
-    var editBtn = event.target.closest("[data-action=edit-programme]");
-    if (editBtn) {
-      event.stopPropagation();
-      openEditProgrammeModal(editBtn.getAttribute("data-class-id"));
-      return;
-    }
-    var delBtn = event.target.closest("[data-action=delete-programme]");
-    if (delBtn) {
+    var editProg = event.target.closest("[data-action=edit-programme]");
+    if (editProg) {
       event.stopPropagation();
       closeAllProgrammeMenus();
-      var delId = delBtn.getAttribute("data-class-id");
-      var prog = Attendify.classById(delId);
-      var label = prog ? prog.code + " — " + prog.name : "this programme";
-      if (!window.confirm("Delete " + label + "? Students and attendance for this programme will be removed.")) return;
-      Attendify.deleteProgramme(delId).then(function (result) {
+      openEditProgrammeModal(editProg.getAttribute("data-class-id"));
+      return;
+    }
+    var deleteProg = event.target.closest("[data-action=delete-programme]");
+    if (deleteProg) {
+      event.stopPropagation();
+      closeAllProgrammeMenus();
+      var progCode = deleteProg.getAttribute("data-programme-code") || "this programme";
+      if (
+        !window.confirm(
+          "Delete programme “" +
+            progCode +
+            "”? This removes students and attendance tied to this programme on the server."
+        )
+      ) {
+        return;
+      }
+      Attendify.deleteProgramme(deleteProg.getAttribute("data-class-id")).then(function (result) {
         if (!result.ok) {
           window.alert(result.error || "Could not delete the programme.");
           return;
         }
         renderDashboard();
-        window.dispatchEvent(new CustomEvent("attendify:class-created"));
+        if (window.AttendifySidebar && AttendifySidebar.refresh) AttendifySidebar.refresh();
+      });
+      return;
+    }
+    var courseMenuToggle = event.target.closest("[data-action=course-menu-toggle]");
+    if (courseMenuToggle) {
+      event.stopPropagation();
+      var courseMenuId = courseMenuToggle.getAttribute("data-menu-id");
+      var coursePanel = courseMenuId ? document.getElementById(courseMenuId) : null;
+      if (!coursePanel) return;
+      var courseWillOpen = coursePanel.classList.contains("hidden");
+      closeAllProgrammeMenus();
+      closeAllCourseMenus();
+      if (courseWillOpen) coursePanel.classList.remove("hidden");
+      return;
+    }
+    var editCourse = event.target.closest("[data-action=edit-course]");
+    if (editCourse) {
+      event.stopPropagation();
+      closeAllCourseMenus();
+      if (window.AttendifySidebar && AttendifySidebar.openEditCourseModal) {
+        AttendifySidebar.openEditCourseModal(
+          editCourse.getAttribute("data-class-id"),
+          editCourse.getAttribute("data-course-id")
+        );
+      }
+      return;
+    }
+    var deleteCourse = event.target.closest("[data-action=delete-course]");
+    if (deleteCourse) {
+      event.stopPropagation();
+      closeAllCourseMenus();
+      var courseCode = deleteCourse.getAttribute("data-course-code") || "this course";
+      if (!window.confirm("Delete course “" + courseCode + "”?")) return;
+      Attendify.deleteProgrammeCourse(deleteCourse.getAttribute("data-course-id")).then(function (result) {
+        if (!result.ok) {
+          window.alert(result.error || "Could not delete the course.");
+          return;
+        }
+        renderDashboard();
+        if (window.AttendifySidebar && AttendifySidebar.refresh) AttendifySidebar.refresh();
+        window.dispatchEvent(new CustomEvent("attendify:course-deleted"));
       });
       return;
     }
     var toggleCourses = event.target.closest("[data-action=toggle-card-courses]");
     if (toggleCourses) {
       var cidToggle = toggleCourses.getAttribute("data-class-id");
-      var listEl = document.getElementById(cardPrefix(cidToggle) + "-courses-list");
+      var prefixToggle = toggleCourses.getAttribute("data-card-prefix") || cardPrefix(cidToggle);
+      var teachToggle = toggleCourses.getAttribute("data-teach-level");
+      var listEl = document.getElementById(prefixToggle + "-courses-list");
       var chev = toggleCourses.querySelector("[data-chevron]");
       var open = listEl && listEl.classList.contains("hidden");
       if (listEl) listEl.classList.toggle("hidden", !open);
       if (chev) chev.classList.toggle("rotate-180", open);
-      sessionStorage.setItem("attendify-card-courses-" + cidToggle, open ? "1" : "0");
+      sessionStorage.setItem(
+        "attendify-card-courses-" + cardCoursesStorageKey(cidToggle, teachToggle),
+        open ? "1" : "0"
+      );
       toggleCourses.setAttribute("aria-expanded", open ? "true" : "false");
       return;
     }
@@ -350,36 +590,10 @@ if (classCardsHost) {
     }
     var button = event.target.closest("[data-action=scan]");
     if (!button) return;
-    openStartAttendanceModal(button.getAttribute("data-class-id"));
+    openStartAttendanceModal(button.getAttribute("data-class-id"), button.getAttribute("data-teach-level"));
   });
 }
 
-document.addEventListener("click", function (event) {
-  if (event.target.closest("[data-action=programme-menu]") || event.target.closest("[data-programme-menu]")) return;
-  closeAllProgrammeMenus();
-});
-
-document.getElementById("edit-programme-cancel").addEventListener("click", closeEditProgrammeModal);
-document.getElementById("editProgrammeModal").addEventListener("click", function (event) {
-  if (event.target.id === "editProgrammeModal") closeEditProgrammeModal();
-});
-document.getElementById("edit-programme-form").addEventListener("submit", function (event) {
-  event.preventDefault();
-  var id = document.getElementById("edit-programme-id").value;
-  var code = document.getElementById("edit-programme-code").value;
-  var name = document.getElementById("edit-programme-name").value;
-  var err = document.getElementById("edit-programme-error");
-  Attendify.updateProgramme(id, code, name).then(function (result) {
-    if (!result.ok) {
-      err.textContent = result.error || "Could not save.";
-      err.classList.remove("hidden");
-      return;
-    }
-    closeEditProgrammeModal();
-    renderDashboard();
-    window.dispatchEvent(new CustomEvent("attendify:class-created"));
-  });
-});
 document.getElementById("btn-close-scanner").addEventListener("click", closeScannerModal);
 var shareAccessBtn = document.getElementById("btn-share-access");
 if (shareAccessBtn) shareAccessBtn.addEventListener("click", openTaShareModal);
@@ -425,11 +639,24 @@ if (taShareCopyBtn) {
 
 document.getElementById("btn-save-session").addEventListener("click", function () {
   Attendify.closeAttendanceSession(activeClassId, activeLectureTitle, activeWeek, activeCourseId || null).then(function () {
+    if (Attendify.clearLiveScanSession) Attendify.clearLiveScanSession();
     closeScannerModal();
     renderDashboard();
   });
 });
-document.getElementById("btn-scan-simulate").addEventListener("click", simulateScan);
+var manualIndexForm = document.getElementById("manual-index-form");
+if (manualIndexForm) {
+  manualIndexForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    submitManualIndexSuffix();
+  });
+}
+var viewRosterBtn = document.getElementById("btn-view-roster");
+if (viewRosterBtn) {
+  viewRosterBtn.addEventListener("click", function () {
+    persistLiveScanFromDashboard();
+  });
+}
 document.getElementById("btn-scan-flip").addEventListener("click", flipCamera);
 
 document.addEventListener("keydown", function (event) {
@@ -439,15 +666,61 @@ document.addEventListener("keydown", function (event) {
 var scanSvg =
   '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>';
 
-function cardPrefix(classId) {
-  return "card-" + classId.replace(/[^a-zA-Z0-9_-]/g, "_");
+function cardPrefix(course) {
+  var classId = typeof course === "object" && course ? course.id : course;
+  var lvl =
+    typeof course === "object" && course && course.teachLevel != null ? String(course.teachLevel) : "";
+  var base = String(classId || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+  return lvl ? "card-" + base + "_L" + lvl : "card-" + base;
 }
 
-function isCardCoursesOpen(classId) {
-  return sessionStorage.getItem("attendify-card-courses-" + classId) === "1";
+function programmeHref(classId, teachLevel) {
+  var url = "programme.html?programme=" + encodeURIComponent(classId);
+  if (teachLevel != null && teachLevel !== "") url += "&level=" + encodeURIComponent(String(teachLevel));
+  return url;
 }
 
-function renderProgrammeCoursesList(classId, prefix) {
+function cardCoursesStorageKey(classId, teachLevel) {
+  var key = String(classId || "");
+  if (teachLevel != null && teachLevel !== "") key += "_L" + teachLevel;
+  return key;
+}
+
+function isCardCoursesOpen(classId, teachLevel) {
+  return sessionStorage.getItem("attendify-card-courses-" + cardCoursesStorageKey(classId, teachLevel)) === "1";
+}
+
+var menuDotsSvg =
+  '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>';
+
+function closeAllProgrammeMenus() {
+  document.querySelectorAll("[data-programme-menu]").forEach(function (el) {
+    el.classList.add("hidden");
+  });
+}
+
+function closeAllCourseMenus() {
+  document.querySelectorAll("[data-course-menu]").forEach(function (el) {
+    el.classList.add("hidden");
+  });
+}
+
+function openEditProgrammeModal(programmeId) {
+  closeAllProgrammeMenus();
+  var programme = Attendify.classById(programmeId);
+  if (!programme) return;
+  document.getElementById("edit-programme-id").value = programme.id;
+  document.getElementById("edit-programme-code").value = programme.code;
+  document.getElementById("edit-programme-name").value = programme.name;
+  document.getElementById("edit-programme-error").classList.add("hidden");
+  document.getElementById("editProgrammeModal").classList.remove("hidden");
+}
+
+function closeEditProgrammeModal() {
+  document.getElementById("editProgrammeModal").classList.add("hidden");
+}
+
+function renderProgrammeCoursesList(classId, prefix, teachLevel) {
   var host = document.getElementById(prefix + "-courses-list");
   if (!host) return;
   var courses = Attendify.coursesForProgramme(classId);
@@ -460,22 +733,63 @@ function renderProgrammeCoursesList(classId, prefix) {
     .map(function (course) {
       var href =
         "course.html?programme=" + encodeURIComponent(classId) + "&course=" + encodeURIComponent(course.id);
+      if (teachLevel != null && teachLevel !== "") {
+        href += "&level=" + encodeURIComponent(String(teachLevel));
+      }
+      var menuId = prefix + "-course-menu-" + String(course.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+      var cstats = Attendify.courseStats(classId, course.id);
+      var takenLine =
+        cstats.weeksWithAttendance > 0
+          ? cstats.weeksWithAttendance +
+            "/" +
+            cstats.semesterWeeks +
+            " wks · " +
+            cstats.attendanceRecords +
+            " taken"
+          : "No attendance yet";
       return (
-        '<li><a href="' +
+        '<li class="flex items-center gap-0.5">' +
+        '<a href="' +
         esc(href) +
-        '" class="block rounded-md px-2 py-1.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-50 border border-transparent hover:border-brand-100 transition">' +
+        '" class="flex-1 min-w-0 block rounded-md px-2 py-1.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-50 border border-transparent hover:border-brand-100 transition">' +
         '<span class="font-mono text-slate-600">' +
         esc(course.code) +
         "</span> · " +
         esc(course.name) +
-        "</a></li>"
+        '<span class="block text-[10px] font-medium text-slate-500 mt-0.5">' +
+        esc(takenLine) +
+        "</span></a>" +
+        '<div class="relative shrink-0 pr-0.5">' +
+        '<button type="button" data-action="course-menu-toggle" data-menu-id="' +
+        esc(menuId) +
+        '" class="w-6 h-6 rounded text-slate-400 hover:text-brand-800 hover:bg-slate-100 flex items-center justify-center" aria-label="Course options">' +
+        menuDotsSvg +
+        "</button>" +
+        '<div id="' +
+        esc(menuId) +
+        '" data-course-menu class="hidden absolute right-0 top-full mt-0.5 z-30 min-w-[7rem] py-1 rounded-lg border border-slate-200 bg-white shadow-lg text-left">' +
+        '<button type="button" data-action="edit-course" data-class-id="' +
+        esc(classId) +
+        '" data-course-id="' +
+        esc(course.id) +
+        '" class="block w-full text-left px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Edit</button>' +
+        '<button type="button" data-action="delete-course" data-class-id="' +
+        esc(classId) +
+        '" data-course-id="' +
+        esc(course.id) +
+        '" data-course-code="' +
+        esc(course.code) +
+        '" class="block w-full text-left px-3 py-1.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
+        "</div></div></li>"
       );
     })
     .join("");
 }
 
-function renderClassCardStats(classId, prefix) {
-  var stats = Attendify.classStats(classId);
+function renderClassCardStats(course, prefix) {
+  var classId = course.id;
+  var level = course.teachLevel;
+  var stats = Attendify.classStats(classId, level);
   var courseTotal = Attendify.coursesForProgramme(classId).length;
   var enrolled = document.getElementById(prefix + "-enrolled");
   var courseCount = document.getElementById(prefix + "-course-count");
@@ -487,8 +801,14 @@ function renderClassCardStats(classId, prefix) {
   if (enrolled) enrolled.textContent = String(stats.enrolled);
   if (courseCount) courseCount.textContent = String(courseTotal);
   if (coursesBadge) coursesBadge.textContent = String(courseTotal);
-  if (sessions) sessions.textContent = String(stats.sessionDays);
-  if (attendance) attendance.textContent = String(stats.attendanceRecords);
+  if (sessions) {
+    sessions.textContent = "—";
+    sessions.title = "Roll-call weeks are shown on each course below";
+  }
+  if (attendance) {
+    attendance.textContent = "—";
+    attendance.title = "Attendance marks are shown on each course below";
+  }
   if (roster) roster.title = stats.enrolled + " students enrolled";
   if (!rate) return;
   var inner = rate.querySelector("span");
@@ -496,58 +816,54 @@ function renderClassCardStats(classId, prefix) {
   if (stats.turnoutToday != null && stats.enrolled > 0) val = stats.turnoutToday + "%";
   if (inner) inner.textContent = val;
   else rate.textContent = val;
-  renderProgrammeCoursesList(classId, prefix);
-}
-
-var menuDotsSvg =
-  '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>';
-
-function closeAllProgrammeMenus() {
-  document.querySelectorAll("[data-programme-menu]").forEach(function (el) {
-    el.classList.add("hidden");
-  });
-}
-
-function openEditProgrammeModal(programmeId) {
-  closeAllProgrammeMenus();
-  var course = Attendify.classById(programmeId);
-  if (!course) return;
-  document.getElementById("edit-programme-id").value = course.id;
-  document.getElementById("edit-programme-code").value = course.code;
-  document.getElementById("edit-programme-name").value = course.name;
-  document.getElementById("edit-programme-error").classList.add("hidden");
-  document.getElementById("editProgrammeModal").classList.remove("hidden");
-}
-
-function closeEditProgrammeModal() {
-  document.getElementById("editProgrammeModal").classList.add("hidden");
+  renderProgrammeCoursesList(classId, prefix, level);
 }
 
 function buildClassCardMarkup(course, index) {
-  var prefix = cardPrefix(course.id);
+  var prefix = cardPrefix(course);
+  var progUrl = programmeHref(course.id, course.teachLevel);
+  var levelBadge =
+    course.teachLevel != null
+      ? '<span class="inline-block ml-1 text-[10px] font-bold uppercase tracking-wide text-tealAccent-700 bg-tealAccent-50 border border-tealAccent-200 px-1.5 py-0.5 rounded">L' +
+        esc(String(course.teachLevel)) +
+        "</span>"
+      : "";
   var topAccent = index === 0 ? " border-t-2 border-t-tealAccent-500" : "";
   var scanBtn = index % 2 === 0 ? "bg-tealAccent-600 hover:bg-tealAccent-700" : "bg-brand-600 hover:bg-brand-700";
   var rateColor = index % 2 === 0 ? "text-emerald-600" : "text-tealAccent-600";
   var badge = index % 2 === 0
     ? "bg-brand-50 text-brand-700 border-brand-100"
     : "bg-slate-100 text-slate-700 border-slate-200";
-  var menuId = prefix + "-menu";
+  var menuId = prefix + "-programme-menu";
+  var coursesOpen = isCardCoursesOpen(course.id, course.teachLevel);
   return (
-    '<article class="relative w-full sm:max-w-[22rem] bg-white rounded-lg p-3 border border-slate-200/90' + topAccent + ' shadow-sm hover:shadow-md hover:border-brand-200/70 transition flex flex-col gap-2.5">' +
+    '<article class="dashboard-prog-card relative w-full bg-white border border-slate-200/90' + topAccent + ' shadow-sm hover:shadow-md hover:border-brand-200/70 transition flex flex-col">' +
       '<div class="absolute top-2 right-2 z-20">' +
-        '<button type="button" data-action="programme-menu" data-class-id="' + esc(course.id) + '" class="w-8 h-8 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center transition" aria-label="Programme options" aria-haspopup="true">' +
-          menuDotsSvg +
+        '<button type="button" data-action="programme-menu-toggle" data-menu-id="' +
+        esc(menuId) +
+        '" class="w-6 h-6 sm:w-7 sm:h-7 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center" aria-label="Programme options">' +
+        menuDotsSvg +
         "</button>" +
-        '<div id="' + menuId + '" data-programme-menu class="hidden absolute right-0 mt-1 w-36 rounded-lg border border-slate-200 bg-white shadow-lg py-1 text-xs font-semibold z-30">' +
-          '<button type="button" data-action="edit-programme" data-class-id="' + esc(course.id) + '" class="w-full text-left px-3 py-2 text-slate-700 hover:bg-slate-50">Edit</button>' +
-          '<button type="button" data-action="delete-programme" data-class-id="' + esc(course.id) + '" class="w-full text-left px-3 py-2 text-rose-600 hover:bg-rose-50">Delete</button>' +
-        "</div>" +
-      "</div>" +
+        '<div id="' +
+        esc(menuId) +
+        '" data-programme-menu class="hidden absolute right-0 top-full mt-0.5 min-w-[8.5rem] py-1 rounded-lg border border-slate-200 bg-white shadow-lg text-left">' +
+        '<button type="button" data-action="edit-programme" data-class-id="' +
+        esc(course.id) +
+        '" class="block w-full text-left px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>' +
+        '<button type="button" data-action="delete-programme" data-class-id="' +
+        esc(course.id) +
+        '" data-programme-code="' +
+        esc(course.code) +
+        '" class="block w-full text-left px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
+        "</div></div>" +
       '<div class="flex items-start justify-between gap-2 pr-8">' +
         '<div class="min-w-0 flex-1">' +
-          '<span class="inline-block text-xs font-mono font-bold ' + badge + ' px-2 py-0.5 rounded border">' + esc(course.code) + "</span>" +
-          '<h4 class="text-sm font-bold text-slate-900 leading-snug mt-1.5"><a href="programme.html?programme=' +
-          encodeURIComponent(course.id) +
+          '<span class="inline-flex flex-wrap items-center gap-1 text-xs font-mono font-bold ' + badge + ' px-2 py-0.5 rounded border">' +
+          esc(course.code) +
+          levelBadge +
+          "</span>" +
+          '<h4 class="text-xs sm:text-sm font-bold text-slate-900 leading-snug mt-1"><a href="' +
+          progUrl +
           '" class="hover:text-brand-700 hover:underline">' +
           esc(course.name) +
           "</a></h4>" +
@@ -557,11 +873,17 @@ function buildClassCardMarkup(course, index) {
         '<div class="flex items-center justify-between gap-2">' +
         '<button type="button" data-action="toggle-card-courses" data-class-id="' +
         esc(course.id) +
-        '" class="flex items-center gap-1.5 text-left flex-1 min-w-0" aria-expanded="' +
-        (isCardCoursesOpen(course.id) ? "true" : "false") +
+        '" data-card-prefix="' +
+        esc(prefix) +
+        '"' +
+        (course.teachLevel != null && course.teachLevel !== ""
+          ? ' data-teach-level="' + esc(String(course.teachLevel)) + '"'
+          : "") +
+        ' class="flex items-center gap-1.5 text-left flex-1 min-w-0" aria-expanded="' +
+        (coursesOpen ? "true" : "false") +
         '">' +
         '<svg data-chevron class="w-3.5 h-3.5 shrink-0 text-slate-400 transition-transform ' +
-        (isCardCoursesOpen(course.id) ? "rotate-180" : "") +
+        (coursesOpen ? "rotate-180" : "") +
         '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>' +
         '<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Courses</span>' +
         '<span id="' + prefix + '-courses-count" class="text-[10px] font-black text-brand-700 tabular-nums">0</span></button>' +
@@ -572,21 +894,31 @@ function buildClassCardMarkup(course, index) {
         '<ul id="' +
         prefix +
         '-courses-list" class="mt-1 space-y-0.5 max-h-32 overflow-y-auto ' +
-        (isCardCoursesOpen(course.id) ? "" : "hidden") +
+        (coursesOpen ? "" : "hidden") +
         '"></ul>' +
       "</div>" +
       '<div class="flex items-center justify-end -mt-1">' +
         '<div id="' + prefix + '-rate" class="text-sm font-black ' + rateColor + ' tabular-nums leading-none" title="Today\u2019s turnout">Today: <span class="text-base">\u2014</span></div>' +
       "</div>" +
-      '<dl class="grid grid-cols-4 gap-1 border-t border-slate-100 pt-2 text-[11px] leading-tight">' +
-        '<div><dt class="text-slate-400 font-medium">Enrolled</dt><dd id="' + prefix + '-enrolled" class="font-bold text-slate-800 text-sm mt-0.5">0</dd></div>' +
-        '<div><dt class="text-slate-400 font-medium">Courses</dt><dd id="' + prefix + '-course-count" class="font-bold text-brand-700 text-sm tabular-nums mt-0.5">0</dd></div>' +
-        '<div><dt class="text-slate-400 font-medium">Sessions</dt><dd id="' + prefix + '-sessions" class="font-bold text-slate-800 text-sm mt-0.5">0</dd></div>' +
-        '<div><dt class="text-slate-400 font-medium" title="Attendance taken this semester">Taken</dt><dd id="' + prefix + '-attendance" class="font-bold text-emerald-700 text-sm tabular-nums mt-0.5">0</dd></div>' +
+      '<dl class="grid grid-cols-4 gap-0.5 border-t border-slate-100 pt-1.5 text-[10px] sm:text-[11px] leading-tight">' +
+        '<div><dt class="text-slate-400 font-medium">Enrolled</dt><dd id="' + prefix + '-enrolled" class="font-bold text-slate-800 text-xs sm:text-sm mt-0.5">0</dd></div>' +
+        '<div><dt class="text-slate-400 font-medium">Courses</dt><dd id="' + prefix + '-course-count" class="font-bold text-brand-700 text-xs sm:text-sm tabular-nums mt-0.5">0</dd></div>' +
+        '<div><dt class="text-slate-400 font-medium" title="See each course in the list">Sessions</dt><dd id="' + prefix + '-sessions" class="font-bold text-slate-400 text-xs sm:text-sm mt-0.5">—</dd></div>' +
+        '<div><dt class="text-slate-400 font-medium" title="Attendance taken per course below">Taken</dt><dd id="' + prefix + '-attendance" class="font-bold text-slate-400 text-xs sm:text-sm tabular-nums mt-0.5">—</dd></div>' +
       "</dl>" +
-      '<div class="flex items-center gap-2">' +
-        '<button type="button" data-action="scan" data-class-id="' + esc(course.id) + '" class="flex-1 py-2 px-2.5 ' + scanBtn + ' text-white rounded-md font-bold text-xs transition flex items-center justify-center gap-1.5">' + scanSvg + "Take attendance</button>" +
-        '<a id="' + prefix + '-roster" href="programme.html?programme=' + encodeURIComponent(course.id) + '" class="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-semibold text-xs transition">Register</a>' +
+      '<div class="flex items-center gap-1.5">' +
+        '<button type="button" data-action="scan" data-class-id="' +
+        esc(course.id) +
+        '"' +
+        (course.teachLevel != null && course.teachLevel !== ""
+          ? ' data-teach-level="' + esc(String(course.teachLevel)) + '"'
+          : "") +
+        ' class="flex-1 py-1.5 sm:py-2 px-2 ' +
+        scanBtn +
+        ' text-white rounded-md font-bold text-xs transition flex items-center justify-center gap-1.5">' +
+        scanSvg +
+        "Take attendance</button>" +
+        '<a id="' + prefix + '-roster" href="' + progUrl + '" class="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-semibold text-xs transition">Register</a>' +
       "</div></article>"
   );
 }
@@ -596,12 +928,13 @@ function renderClassCards() {
   if (!host) return;
   var classes = Attendify.load().classes || [];
   if (!classes.length) {
-    host.innerHTML = '<p class="text-sm text-slate-500">No programmes yet. Tap <strong class="text-brand-700">+</strong> beside <em>Programmes</em> in the sidebar.</p>';
+    host.innerHTML =
+      '<p class="text-sm text-slate-500">No programmes on your dashboard yet. Open <a href="settings.html" class="font-bold text-brand-700 hover:underline">Settings</a>, tap <strong>Edit</strong>, and add each programme with its level.</p>';
     return;
   }
   host.innerHTML = classes.map(buildClassCardMarkup).join("");
   classes.forEach(function (course, index) {
-    renderClassCardStats(course.id, cardPrefix(course.id));
+    renderClassCardStats(course, cardPrefix(course));
   });
 }
 
@@ -610,18 +943,51 @@ function renderDashboard() {
   var state = Attendify.load();
   document.getElementById("stat-students").textContent = String(stats.totalStudents);
   document.getElementById("stat-classes").textContent = String(stats.totalClasses);
-  document.getElementById("stat-class-list").textContent = state.classes.map(function (item) { return item.code; }).join(", ") || "No programmes yet";
+  document.getElementById("stat-class-list").textContent =
+    state.classes
+      .map(function (item) {
+        return item.code + (item.teachLevel != null ? " L" + item.teachLevel : "");
+      })
+      .join(", ") || "No programmes yet";
   document.getElementById("stat-weeks").textContent = String(stats.semesterWeeks);
   document.getElementById("stat-week-detail").textContent = "Week " + stats.currentWeek + " of " + stats.semesterWeeks;
   document.getElementById("stat-attendance").textContent = String(stats.attendanceTaken);
-  document.getElementById("stat-attendance-detail").textContent = stats.sessionDays + " class day" + (stats.sessionDays === 1 ? "" : "s") + " recorded";
+  document.getElementById("stat-attendance-detail").textContent =
+    stats.sessionDays + " course session" + (stats.sessionDays === 1 ? "" : "s") + " recorded";
   renderClassCards();
 }
 
 var params = new URLSearchParams(window.location.search);
+
+function applyLecturerChrome(session) {
+  if (!session || !session.lecturer) return;
+  Attendify.paintLecturerChrome(session.lecturer, { sidebar: true });
+}
+
+function promptCreateFirstCourse(classId) {
+  if (!classId) return;
+  setTimeout(function () {
+    if (window.AttendifySidebar && AttendifySidebar.openCreateCourseModal) {
+      AttendifySidebar.openCreateCourseModal(classId);
+    }
+  }, 450);
+}
+
 Attendify.ready().then(function () {
+  var session = Attendify.requireLecturerSession();
+  if (!session) return;
+  applyLecturerChrome(session);
   fillWeekSelect("start-attendance-week");
   renderDashboard();
+
+  var classFromQuery = params.get("class") || params.get("programme") || session.classId || "";
+  var wantsCourse = params.get("createCourse") === "1" || session.createCourse;
+  if (wantsCourse && classFromQuery) {
+    session.createCourse = false;
+    Attendify.saveSession(session);
+    promptCreateFirstCourse(classFromQuery);
+  }
+
   setInterval(function () {
     Attendify.ready().then(function () {
       renderDashboard();
@@ -630,12 +996,72 @@ Attendify.ready().then(function () {
       }
     });
   }, 4000);
-  if (params.get("scan") === "1") openScannerModal(params.get("class") || defaultClassId());
+  if (params.get("resumeScan") === "1" && Attendify.getLiveScanSession) {
+    var live = Attendify.getLiveScanSession();
+    if (live && Attendify.isLiveScanSessionStillOpen(live)) {
+      openScannerModal(live.classId, live.lectureName, {
+        weekNumber: live.weekNumber,
+        courseId: live.courseId || "",
+        sessionId: live.sessionId || null,
+        teachLevel: live.teachLevel || ""
+      });
+    }
+  } else if (params.get("scan") === "1") {
+    openScannerModal(params.get("class") || defaultClassId());
+  }
 });
 
-window.addEventListener("attendify:class-created", function () {
+window.addEventListener("attendify:programmes-updated", function () {
   Attendify.ready().then(renderDashboard);
 });
 window.addEventListener("attendify:course-created", function () {
   Attendify.ready().then(renderDashboard);
 });
+window.addEventListener("attendify:course-updated", function () {
+  Attendify.ready().then(renderDashboard);
+});
+window.addEventListener("attendify:course-deleted", function () {
+  Attendify.ready().then(renderDashboard);
+});
+
+document.addEventListener("click", function (event) {
+  if (
+    !event.target.closest("[data-programme-menu]") &&
+    !event.target.closest("[data-action=programme-menu-toggle]") &&
+    !event.target.closest("[data-course-menu]") &&
+    !event.target.closest("[data-action=course-menu-toggle]")
+  ) {
+    closeAllProgrammeMenus();
+    closeAllCourseMenus();
+  }
+});
+
+var editProgrammeCancel = document.getElementById("edit-programme-cancel");
+if (editProgrammeCancel) editProgrammeCancel.addEventListener("click", closeEditProgrammeModal);
+var editProgrammeModal = document.getElementById("editProgrammeModal");
+if (editProgrammeModal) {
+  editProgrammeModal.addEventListener("click", function (event) {
+    if (event.target.id === "editProgrammeModal") closeEditProgrammeModal();
+  });
+}
+var editProgrammeForm = document.getElementById("edit-programme-form");
+if (editProgrammeForm) {
+  editProgrammeForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var id = document.getElementById("edit-programme-id").value;
+    var code = document.getElementById("edit-programme-code").value.trim();
+    var name = document.getElementById("edit-programme-name").value.trim();
+    var err = document.getElementById("edit-programme-error");
+    err.classList.add("hidden");
+    Attendify.updateProgramme(id, code, name).then(function (result) {
+      if (!result.ok) {
+        err.textContent = result.error || "Could not save.";
+        err.classList.remove("hidden");
+        return;
+      }
+      closeEditProgrammeModal();
+      renderDashboard();
+      if (window.AttendifySidebar && AttendifySidebar.refresh) AttendifySidebar.refresh();
+    });
+  });
+}

@@ -5,12 +5,31 @@
   var DEFAULT_PORT = "3000";
   var API_BASE = "http://localhost:" + DEFAULT_PORT;
 
+  function isLoopbackHost(hostname) {
+    var h = String(hostname || "").toLowerCase();
+    return h === "localhost" || h === "127.0.0.1" || h === "[::1]";
+  }
+
+  function isLoopbackOrigin(origin) {
+    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(String(origin || "").trim());
+  }
+
   function apiUrl(path) {
     if (window.location.protocol === "file:") return API_BASE + path;
     var host = window.location.hostname;
-    var port = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
-    if ((host === "localhost" || host === "127.0.0.1") && (!port || port === DEFAULT_PORT)) return path;
-    return API_BASE + path;
+    var port = window.location.port;
+    if (isLoopbackHost(host)) {
+      if (!port || port === DEFAULT_PORT) return path;
+      return API_BASE + path;
+    }
+    return path;
+  }
+
+  function rememberShareOrigins(host) {
+    if (!host) return;
+    if (host.publicOrigin) shareOrigin = String(host.publicOrigin).replace(/\/$/, "");
+    else if (host.requestOrigin) shareOrigin = String(host.requestOrigin).replace(/\/$/, "");
+    else if (host.origin) shareOrigin = String(host.origin).replace(/\/$/, "");
   }
 
   function connectionHint() {
@@ -61,40 +80,109 @@
     }
   }
 
-  function ready() {
-    return fetch(apiUrl("/api/host")).then(function (response) { return response.json(); }).then(function (host) {
-      if (host && host.origin) shareOrigin = host.origin;
-      return fetch(apiUrl("/api/state"));
-    }).then(function (response) { return response.json(); }).then(function (state) {
-      var local = null;
-      try { local = JSON.parse(localStorage.getItem(KEY)); } catch (error) { local = null; }
-      if (local && local.students && state.students && local.students.length > state.students.length && !sessionStorage.getItem("attendify-migrated")) {
-        return fetch(apiUrl("/api/state"), {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(local)
-        }).then(function (response) { return response.json(); }).then(function (saved) {
-          sessionStorage.setItem("attendify-migrated", "1");
-          applyState(saved.state || local);
-          return cache;
+  function currentLecturerId() {
+    try {
+      var session = getSession();
+      var id = session && session.lecturer && session.lecturer.id ? String(session.lecturer.id) : "";
+      if (!id || id.indexOf("demo-") === 0) return "";
+      return id;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function withLecturer(payload) {
+    var body = Object.assign({}, payload || {});
+    var lecturerId = currentLecturerId();
+    if (lecturerId) body.lecturerId = lecturerId;
+    return body;
+  }
+
+  function authHeaders(extra) {
+    var headers = Object.assign({ "Content-Type": "application/json" }, extra || {});
+    try {
+      var session = getSession();
+      if (session && session.token) headers["X-Attendify-Token"] = session.token;
+    } catch (_) {}
+    return headers;
+  }
+
+  function apiFetch(path, options) {
+    options = options || {};
+    var opts = Object.assign({}, options);
+    opts.credentials = options.credentials || "same-origin";
+    opts.headers = authHeaders(options.headers || {});
+    if (options.body && typeof options.body === "object" && !(options.body instanceof Blob)) {
+      opts.body = JSON.stringify(options.body);
+    }
+    return fetch(apiUrl(path), opts).then(function (response) {
+      if (response.status === 401) {
+        return response.json().catch(function () {
+          return { ok: false, code: "AUTH_REQUIRED" };
+        }).then(function (body) {
+          var page = (window.location.pathname || "").toLowerCase();
+          var isPublic =
+            page.indexOf("login.html") !== -1 ||
+            page.indexOf("signup.html") !== -1 ||
+            page.indexOf("enroll.html") !== -1 ||
+            page.indexOf("ta-scanner.html") !== -1;
+          if (!isPublic) {
+            clearSession();
+            var next = encodeURIComponent(
+              (window.location.pathname.split("/").pop() || "dashboard.html") + (window.location.search || "")
+            );
+            window.location.replace("login.html?next=" + next);
+          }
+          return Promise.reject(body || { ok: false, code: "AUTH_REQUIRED" });
         });
       }
-      applyState(state);
-      return cache;
-    }).catch(function () {
-      if (!shareOrigin) shareOrigin = window.location.origin;
-      return cache;
+      return response;
     });
   }
 
-  function classById(id) {
+  function ready() {
+    return apiFetch("/api/host")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (host) {
+        rememberShareOrigins(host);
+        return apiFetch("/api/state");
+      })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (state) {
+        applyState(state);
+        return cache;
+      })
+      .catch(function () {
+        if (!shareOrigin) shareOrigin = window.location.origin;
+        return cache;
+      });
+  }
+
+  function classById(id, level) {
     var state = load();
-    var found = state.classes.filter(function (item) { return item.id === id; })[0];
+    var needle = String(id || "");
+    if (level != null && level !== "") {
+      var withLevel = state.classes.filter(function (item) {
+        return item.id === needle && Number(item.teachLevel) === Number(level);
+      })[0];
+      if (withLevel) return withLevel;
+    }
+    var found = state.classes.filter(function (item) {
+      return item.id === needle;
+    })[0];
     return found || state.classes[0];
   }
 
-  function studentsFor(classId) {
-    return load().students.filter(function (student) { return student.classId === classId; });
+  function studentsFor(classId, level) {
+    return load().students.filter(function (student) {
+      if (student.classId !== classId) return false;
+      if (level == null || level === "") return true;
+      return Number(student.level) === Number(level);
+    });
   }
 
   function today() {
@@ -360,6 +448,49 @@
     );
   }
 
+  function lecturerAvatarPerson(lecturer) {
+    var lec = lecturer || {};
+    return {
+      name: lec.fullName || lec.username || "Lecturer",
+      photo: lec.photo && String(lec.photo).trim() ? String(lec.photo).trim() : ""
+    };
+  }
+
+  function paintLecturerChrome(lecturer, opts) {
+    opts = opts || {};
+    if (!lecturer) return;
+    var name = lecturer.fullName || lecturer.username || "Lecturer";
+    var username = lecturer.username || "";
+    var nameEl = document.getElementById("lecturer-name");
+    var userEl = document.getElementById("lecturer-username");
+    var avatarEl = document.getElementById("lecturer-avatar");
+    if (nameEl) nameEl.textContent = name;
+    if (userEl) userEl.textContent = username;
+    if (avatarEl) {
+      var size = opts.sizeClass || "w-10 h-10";
+      var ring =
+        opts.ringClass != null
+          ? opts.ringClass
+          : opts.sidebar
+            ? "ring-2 ring-tealAccent-400/40"
+            : "ring-2 ring-white/80";
+      avatarEl.className =
+        opts.avatarClass ||
+        "w-10 h-10 shrink-0 inline-flex items-center justify-center overflow-hidden rounded-full";
+      avatarEl.innerHTML = avatarMarkup(lecturerAvatarPerson(lecturer), size, ring);
+      hydrateAvatars(avatarEl);
+    }
+  }
+
+  function formatStudentLevel(studentOrLevel) {
+    var lv =
+      studentOrLevel != null && typeof studentOrLevel === "object"
+        ? studentOrLevel.level
+        : studentOrLevel;
+    if (lv == null || lv === "") return "—";
+    return "L" + String(lv);
+  }
+
   function printAttendanceReport(meta) {
     meta = meta || {};
     var rows = meta.rows || [];
@@ -371,6 +502,8 @@
           "</td><td>" +
           htmlText(row.index) +
           "</td><td>" +
+          htmlText(row.level != null ? row.level : "—") +
+          "</td><td>" +
           htmlText(row.status) +
           "</td><td>" +
           htmlText(row.time || "—") +
@@ -381,14 +514,14 @@
     var html =
       "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" +
       htmlText(meta.title || "Attendance") +
-      "</title><style>body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a}h1{font-size:20px;margin:0 0 4px}p{margin:0 0 16px;color:#475569;font-size:13px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #e2e8f0;padding:8px 10px;text-align:left}th{background:#f8fafc;text-transform:uppercase;font-size:10px;letter-spacing:.04em}</style></head><body>" +
+      "</title><style>body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a}h1{font-size:20px;margin:0 0 4px}p{margin:0 0 16px;color:#475569;font-size:13px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #e2e8f0;padding:8px 10px;text-align:left}th{background:#f8fafc;text-transform:uppercase;font-size:10px;letter-spacing:.04em}td:nth-child(2){font-family:ui-monospace,monospace}</style></head><body>" +
       "<h1>" +
       htmlText(meta.title || "Attendance") +
       "</h1>" +
       "<p>" +
       htmlText(meta.subtitle || "") +
       "</p>" +
-      "<table><thead><tr><th>Student</th><th>Index</th><th>Status</th><th>Time</th></tr></thead><tbody>" +
+      "<table><thead><tr><th>Student name</th><th>Index no.</th><th>Level</th><th>Status</th><th>Time</th></tr></thead><tbody>" +
       bodyRows +
       "</tbody></table></body></html>";
     var win = window.open("", "_blank");
@@ -405,10 +538,9 @@
   }
 
   function addStudent(input) {
-    return fetch(apiUrl("/api/students"), {
+    return apiFetch("/api/students", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input)
+      body: withLecturer(input)
     }).then(function (response) { return response.json(); }).then(function (result) {
       if (result.state) applyState(result.state);
       return result;
@@ -417,11 +549,98 @@
     });
   }
 
+  function deleteStudent(studentId) {
+    studentId = String(studentId || "").trim();
+    if (!studentId) return Promise.resolve({ ok: false, error: "Student not found." });
+    return apiFetch("/api/students/" + encodeURIComponent(studentId), {
+      method: "DELETE",
+      body: withLecturer({ id: studentId })
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result.state) applyState(result.state);
+        return result;
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
   function findStudent(classId, index) {
     var needle = String(index || "").trim().toLowerCase();
     return load().students.filter(function (student) {
       return student.classId === classId && student.index.toLowerCase() === needle;
     })[0] || null;
+  }
+
+  function normalizeIndexSuffix(input) {
+    var digits = String(input || "").replace(/\D/g, "");
+    if (!digits.length) return "";
+    if (digits.length > 4) return "";
+    return digits.padStart(4, "0");
+  }
+
+  function resolveStudentIndexSuffix(classId, input, level) {
+    var suffix = normalizeIndexSuffix(input);
+    if (!suffix) {
+      return { ok: false, error: "Enter the last four digits of the index (e.g. 0001)." };
+    }
+    var students = studentsFor(classId, level != null && level !== "" ? level : null);
+    var matches = students.filter(function (student) {
+      var tail = String(student.index || "")
+        .replace(/\D/g, "")
+        .slice(-4);
+      return tail === suffix;
+    });
+    if (!matches.length) {
+      return { ok: false, error: "No registered student with index ending in " + suffix + "." };
+    }
+    if (matches.length > 1) {
+      return { ok: false, error: "More than one student matches — scan the QR or use the full index." };
+    }
+    return { ok: true, student: matches[0], index: matches[0].index };
+  }
+
+  var LIVE_SCAN_KEY = "attendify-live-scan";
+
+  function saveLiveScanSession(data) {
+    try {
+      sessionStorage.setItem(LIVE_SCAN_KEY, JSON.stringify(data || {}));
+    } catch (_) {}
+  }
+
+  function getLiveScanSession() {
+    try {
+      var raw = sessionStorage.getItem(LIVE_SCAN_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function clearLiveScanSession() {
+    try {
+      sessionStorage.removeItem(LIVE_SCAN_KEY);
+    } catch (_) {}
+  }
+
+  function isLiveScanSessionStillOpen(live) {
+    if (!live || !live.classId) return false;
+    var week = Number(live.weekNumber) || 1;
+    if (live.courseId) {
+      var course = courseById(live.courseId);
+      if (!course) return false;
+      return !isCourseWeekSessionClosed(live.classId, course, week);
+    }
+    if (live.lectureName) {
+      var sessions = load().sessions || {};
+      var key = sessionKey(live.classId, live.lectureName, week);
+      var sess = sessions[key];
+      if (sess && sess.closedAt) return false;
+    }
+    return true;
   }
 
   function parseQr(text) {
@@ -438,14 +657,13 @@
 
   function startAttendanceSession(classId, lectureName, options) {
     options = options || {};
-    var payload = { classId: classId };
+    var payload = withLecturer({ classId: classId });
     if (options.courseId) payload.courseId = options.courseId;
     else payload.lectureName = lectureName;
     if (options.weekNumber != null) payload.weekNumber = options.weekNumber;
-    return fetch(apiUrl("/api/sessions/start"), {
+    return apiFetch("/api/sessions/start", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: payload
     })
       .then(function (response) {
         return response.json();
@@ -460,14 +678,13 @@
   }
 
   function closeAttendanceSession(classId, lectureName, weekNumber, courseId) {
-    var payload = { classId: classId };
+    var payload = withLecturer({ classId: classId });
     if (courseId) payload.courseId = courseId;
     else if (lectureName) payload.lectureName = lectureName;
     if (weekNumber != null) payload.weekNumber = weekNumber;
-    return fetch(apiUrl("/api/sessions/close"), {
+    return apiFetch("/api/sessions/close", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: payload
     })
       .then(function (response) {
         return response.json();
@@ -491,14 +708,13 @@
   }
 
   function removeAttendance(classId, studentId, lectureName, weekNumber, courseId) {
-    var payload = { classId: classId, studentId: studentId };
+    var payload = withLecturer({ classId: classId, studentId: studentId });
     if (courseId) payload.courseId = courseId;
     else payload.lectureName = lectureName;
     if (weekNumber != null) payload.weekNumber = weekNumber;
-    return fetch(apiUrl("/api/attendance/remove"), {
+    return apiFetch("/api/attendance/remove", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: payload
     })
       .then(function (response) {
         return response.json();
@@ -513,7 +729,7 @@
   }
 
   function markPresent(scannerClassId, index, qrToken, lectureName, weekNumber) {
-    var payload = { classId: scannerClassId };
+    var payload = withLecturer({ classId: scannerClassId });
     if (activeCourseId) payload.courseId = activeCourseId;
     else payload.lectureName = lectureName != null ? lectureName : activeLectureName;
     var week =
@@ -525,10 +741,9 @@
     if (week != null) payload.weekNumber = week;
     if (qrToken) payload.qrToken = qrToken;
     else if (index) payload.index = index;
-    return fetch(apiUrl("/api/attendance"), {
+    return apiFetch("/api/attendance", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: payload
     }).then(function (response) { return response.json(); }).then(function (result) {
       if (result.state) applyState(result.state);
       return result;
@@ -548,33 +763,83 @@
     }).filter(Boolean);
   }
 
+  function publicShareOrigin(hostInfo) {
+    var envOrigin = hostInfo && hostInfo.publicOrigin ? String(hostInfo.publicOrigin).replace(/\/$/, "") : "";
+    if (envOrigin) return envOrigin;
+    var reqOrigin = hostInfo && hostInfo.requestOrigin ? String(hostInfo.requestOrigin).replace(/\/$/, "") : "";
+    if (reqOrigin) return reqOrigin;
+    if (shareOrigin && !isLoopbackOrigin(shareOrigin)) {
+      return shareOrigin.replace(/\/$/, "");
+    }
+    if (window.location.protocol !== "file:" && window.location.origin) {
+      var pageOrigin = window.location.origin.replace(/\/$/, "");
+      if (!isLoopbackOrigin(pageOrigin)) return pageOrigin;
+      if (hostInfo && hostInfo.origin && !isLoopbackOrigin(hostInfo.origin)) {
+        return String(hostInfo.origin).replace(/\/$/, "");
+      }
+      if (shareOrigin) return shareOrigin.replace(/\/$/, "");
+      return pageOrigin;
+    }
+    if (hostInfo && hostInfo.localOrigin) return String(hostInfo.localOrigin).replace(/\/$/, "");
+    return (shareOrigin || API_BASE).replace(/\/$/, "");
+  }
+
+  function refreshShareOrigin() {
+    return apiFetch("/api/host")
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (host) {
+        rememberShareOrigins(host);
+        return host;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function displayShareUrl(url) {
+    return String(url || "").replace(/^https?:\/\//i, "");
+  }
+
   function enrollUrl(classId) {
-    var origin = shareOrigin || window.location.origin;
-    return origin.replace(/\/$/, "") + "/enroll.html?class=" + encodeURIComponent(classId);
+    var origin = publicShareOrigin();
+    var id = String(classId || "").trim();
+    return origin + "/join/" + encodeURIComponent(id);
+  }
+
+  function scanShareUrl(token) {
+    var origin = publicShareOrigin();
+    return origin + "/scan/" + encodeURIComponent(token);
   }
 
   function createTaShareLink(classId, sessionId) {
-    return fetch(apiUrl("/api/host")).then(function (r) { return r.json(); }).catch(function () { return {}; })
+    return apiFetch("/api/host")
+      .then(function (r) {
+        return r.json();
+      })
+      .catch(function () {
+        return {};
+      })
       .then(function (host) {
-        return fetch(apiUrl("/api/ta/create"), {
+        return apiFetch("/api/ta/create", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ classId: classId, sessionId: sessionId })
-        }).then(function (r) { return r.json(); }).then(function (result) {
-          if (!result.ok) return result;
-          // Prefer HTTPS origin so phone camera works (requires HTTPS)
-          var origin = (host && host.httpsOrigin) ? host.httpsOrigin
-                     : (host && host.origin) ? host.origin
-                     : shareOrigin || window.location.origin;
-          // If still localhost, use window.location as fallback
-          if (!origin || origin.indexOf("localhost") !== -1 || origin.indexOf("127.0.0.1") !== -1) {
-            if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
-              origin = window.location.origin;
-            }
-          }
-          var url = origin.replace(/\/$/, "") + "/ta-scanner.html?token=" + encodeURIComponent(result.taToken);
-          return { ok: true, taToken: result.taToken, url: url };
-        });
+          body: { classId: classId, sessionId: sessionId }
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (result) {
+            if (!result.ok) return result;
+            var origin = publicShareOrigin(host);
+            var url = origin + "/scan/" + encodeURIComponent(result.taToken);
+            return {
+              ok: true,
+              taToken: result.taToken,
+              url: url,
+              displayUrl: displayShareUrl(url)
+            };
+          });
       });
   }
 
@@ -700,7 +965,7 @@
     var csv = rows.map(function (row) {
       return row.map(csvEscape).join(",");
     }).join("\n");
-    var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    var blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     var url = URL.createObjectURL(blob);
     var link = document.createElement("a");
     link.href = url;
@@ -811,7 +1076,12 @@
   }
 
   function formatTime(iso) {
-    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+    } catch (_) {
+      return String(iso);
+    }
   }
 
   function semesterInfo() {
@@ -823,8 +1093,13 @@
     var state = load();
     var attendanceTaken = 0;
     var sessionDays = 0;
+    var seen = {};
     Object.keys(state.sessions || {}).forEach(function (key) {
       var session = state.sessions[key];
+      if (!session || !session.courseId) return;
+      var sid = session.sessionId || key;
+      if (seen[sid]) return;
+      seen[sid] = true;
       sessionDays += 1;
       attendanceTaken += (session.records || []).length;
     });
@@ -835,6 +1110,37 @@
       currentWeek: semesterInfo().currentWeek,
       attendanceTaken: attendanceTaken,
       sessionDays: sessionDays
+    };
+  }
+
+  function courseStats(classId, courseId) {
+    var state = load();
+    var semesterWeeks = semesterInfo().totalWeeks || 15;
+    var sessionDays = 0;
+    var attendanceRecords = 0;
+    var weeks = {};
+    var seen = {};
+    var needleClass = String(classId || "");
+    var needleCourse = String(courseId || "");
+    Object.keys(state.sessions || {}).forEach(function (key) {
+      var session = state.sessions[key];
+      if (!session || String(session.courseId || "") !== needleCourse) return;
+      var belongs =
+        String(session.classId || "") === needleClass || key.indexOf(needleClass + ":") === 0;
+      if (!belongs) return;
+      var sid = session.sessionId || key;
+      if (seen[sid]) return;
+      seen[sid] = true;
+      sessionDays += 1;
+      attendanceRecords += (session.records || []).length;
+      var w = Number(session.weekNumber);
+      if (w > 0) weeks[w] = true;
+    });
+    return {
+      sessionDays: sessionDays,
+      attendanceRecords: attendanceRecords,
+      weeksWithAttendance: Object.keys(weeks).length,
+      semesterWeeks: semesterWeeks
     };
   }
 
@@ -885,9 +1191,9 @@
     return months[m - 1] + " " + parseInt(parts[2], 10) + ", " + parts[0];
   }
 
-  function classStats(classId) {
+  function classStats(classId, level) {
     var state = load();
-    var students = studentsFor(classId);
+    var students = studentsFor(classId, level);
     var selfRegistered = students.filter(function (student) { return student.source === "link"; }).length;
     var sessionDays = 0;
     var attendanceRecords = 0;
@@ -919,8 +1225,19 @@
   function requestedClassId() {
     var params = new URLSearchParams(window.location.search);
     var requested = params.get("programme") || params.get("class");
+    if (!requested) {
+      var joinMatch = String(window.location.pathname || "").match(/\/join\/([^/]+)\/?$/i);
+      if (joinMatch) {
+        try {
+          requested = decodeURIComponent(joinMatch[1]);
+        } catch (_) {
+          requested = joinMatch[1];
+        }
+      }
+    }
     var state = load();
     if (requested && state.classes.some(function (item) { return item.id === requested; })) return requested;
+    if (requested) return requested;
     return state.activeClassId || (state.classes[0] && state.classes[0].id) || "";
   }
 
@@ -930,10 +1247,9 @@
   }
 
   function saveState(state) {
-    return fetch(apiUrl("/api/state"), {
+    return apiFetch("/api/state", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state)
+      body: state
     }).then(function (response) { return response.json(); }).then(function (result) {
       if (result.state) applyState(result.state);
       else if (result.ok) applyState(state);
@@ -948,10 +1264,9 @@
     code = String(code || "").trim();
     name = String(name || "").trim();
     if (!id) return Promise.resolve({ ok: false, error: "Programme not found." });
-    return fetch(apiUrl("/api/classes/" + encodeURIComponent(id)), {
+    return apiFetch("/api/classes/" + encodeURIComponent(id), {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: id, code: code, name: name })
+      body: { id: id, code: code, name: name }
     })
       .then(function (response) {
         return response.json();
@@ -968,7 +1283,7 @@
   function deleteProgramme(id) {
     id = String(id || "").trim();
     if (!id) return Promise.resolve({ ok: false, error: "Programme not found." });
-    return fetch(apiUrl("/api/classes/" + encodeURIComponent(id)), { method: "DELETE" })
+    return apiFetch("/api/classes/" + encodeURIComponent(id), { method: "DELETE" })
       .then(function (response) {
         return response.json();
       })
@@ -986,10 +1301,49 @@
     code = String(code || "").trim();
     name = String(name || "").trim();
     if (!classId) return Promise.resolve({ ok: false, error: "Programme not found." });
-    return fetch(apiUrl("/api/classes/" + encodeURIComponent(classId) + "/courses"), {
+    return apiFetch("/api/classes/" + encodeURIComponent(classId) + "/courses", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ classId: classId, code: code, name: name })
+      body: withLecturer({ classId: classId, code: code, name: name })
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result.state) applyState(result.state);
+        return result;
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
+  function updateProgrammeCourse(courseId, code, name) {
+    courseId = String(courseId || "").trim();
+    code = String(code || "").trim();
+    name = String(name || "").trim();
+    if (!courseId) return Promise.resolve({ ok: false, error: "Course not found." });
+    return apiFetch("/api/courses/" + encodeURIComponent(courseId), {
+      method: "PATCH",
+      body: withLecturer({ courseId: courseId, code: code, name: name })
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result.state) applyState(result.state);
+        return result;
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
+  function deleteProgrammeCourse(courseId) {
+    courseId = String(courseId || "").trim();
+    if (!courseId) return Promise.resolve({ ok: false, error: "Course not found." });
+    return apiFetch("/api/courses/" + encodeURIComponent(courseId), {
+      method: "DELETE",
+      body: withLecturer({ courseId: courseId })
     })
       .then(function (response) {
         return response.json();
@@ -1007,10 +1361,9 @@
     code = String(code || "").trim();
     name = String(name || "").trim();
     if (!code || !name) return Promise.resolve({ ok: false, error: "Enter programme code and name." });
-    return fetch(apiUrl("/api/classes"), {
+    return apiFetch("/api/classes", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: code, name: name })
+      body: withLecturer({ code: code, name: name })
     }).then(function (response) {
       return response.json().then(function (result) {
         if (!response.ok && result && result.error) return { ok: false, error: result.error };
@@ -1025,13 +1378,258 @@
     });
   }
 
+  var SESSION_KEY = "attendify-session";
+
+  function saveSession(session) {
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    } catch (_) {}
+  }
+
+  function clearSession() {
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_KEY);
+    } catch (_) {}
+  }
+
+  function getSession() {
+    try {
+      var raw = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function loginRedirectUrl() {
+    var page =
+      (window.location.pathname.split("/").pop() || "dashboard.html") + (window.location.search || "");
+    return "login.html?next=" + encodeURIComponent(page);
+  }
+
+  function requireLecturerSession() {
+    var session = getSession();
+    if (!session || !session.lecturer || !session.token) {
+      clearSession();
+      window.location.replace(loginRedirectUrl());
+      return null;
+    }
+    return session;
+  }
+
+  function validateSession() {
+    return fetch(apiUrl("/api/auth/me"), {
+      method: "GET",
+      headers: authHeaders(),
+      credentials: "same-origin"
+    })
+      .then(function (response) {
+        return response.json().then(function (body) {
+          return { status: response.status, body: body };
+        });
+      })
+      .then(function (pack) {
+        if (!pack.body || !pack.body.ok) {
+          clearSession();
+          return { ok: false, code: "AUTH_REQUIRED", error: (pack.body && pack.body.error) || "Please sign in." };
+        }
+        var session = getSession() || {};
+        session.lecturer = pack.body.lecturer || session.lecturer;
+        if (pack.body.programmeIds) session.programmeIds = pack.body.programmeIds;
+        if (pack.body.expiresAt) session.expiresAt = pack.body.expiresAt;
+        if (pack.body.token) session.token = pack.body.token;
+        session.loggedInAt = session.loggedInAt || new Date().toISOString();
+        saveSession(session);
+        return pack.body;
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
+  function listUccProgrammes() {
+    return fetch(apiUrl("/api/ucc-programmes"), { credentials: "same-origin" })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        return result && result.programmes ? result.programmes : [];
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function previewUccProgrammeRoster(uccProgrammeId, level) {
+    var qs =
+      "?uccProgrammeId=" +
+      encodeURIComponent(String(uccProgrammeId || "")) +
+      "&level=" +
+      encodeURIComponent(String(level || ""));
+    return fetch(apiUrl("/api/ucc-programmes/roster-preview" + qs), { credentials: "same-origin" })
+      .then(function (response) {
+        return response.json();
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
+  function persistAuthSession(result) {
+    if (!result || !result.ok || !result.lecturer || !result.token) return;
+    saveSession({
+      lecturer: result.lecturer,
+      token: result.token,
+      expiresAt: result.expiresAt || null,
+      classId: result.classId || "",
+      programmeIds: result.programmeIds || (result.classId ? [result.classId] : []),
+      createCourse: !!result.createCourse,
+      loggedInAt: new Date().toISOString()
+    });
+  }
+
+  function signupLecturer(payload) {
+    return fetch(apiUrl("/api/auth/signup"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+      credentials: "same-origin"
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result.state) applyState(result.state);
+        persistAuthSession(result);
+        return result;
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
+  function loginLecturer(payload) {
+    return fetch(apiUrl("/api/auth/login"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+      credentials: "same-origin"
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result.state) applyState(result.state);
+        persistAuthSession(result);
+        return result;
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
+  function logoutLecturer() {
+    var session = getSession();
+    var token = session && session.token ? session.token : "";
+    clearSession();
+    function go() {
+      window.location.replace("login.html");
+    }
+    fetch(apiUrl("/api/auth/logout"), {
+      method: "POST",
+      headers: authHeaders({ "X-Attendify-Token": token }),
+      credentials: "same-origin",
+      body: "{}"
+    })
+      .then(go)
+      .catch(go);
+  }
+
+  function mergeProgrammeSelection(baseList) {
+    var list = baseList || [];
+    if (!list.length) return list;
+    var session = getSession() || {};
+    var linked = {};
+    (session.programmeIds || []).forEach(function (id) {
+      linked[String(id)] = true;
+    });
+    var classes = load().classes || [];
+    return list.map(function (item) {
+      var pick = Object.assign({}, item);
+      if (pick.selected != null && pick.classId) return pick;
+      var cls = classes.filter(function (c) {
+        return String(c.code || "").toLowerCase() === String(pick.code || "").toLowerCase();
+      })[0];
+      var classId = pick.classId || (cls ? cls.id : "");
+      pick.classId = classId;
+      if (pick.selected == null) pick.selected = classId ? !!linked[classId] : false;
+      if (pick.studentCount == null) pick.studentCount = 0;
+      if (pick.sharedRoster == null) pick.sharedRoster = false;
+      return pick;
+    });
+  }
+
+  function fetchLecturerProgrammeCatalogue() {
+    return apiFetch("/api/auth/programmes")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result && result.ok) {
+          return {
+            programmes: result.programmes || [],
+            assignments: result.assignments || []
+          };
+        }
+        return listUccProgrammes().then(function (base) {
+          return { programmes: mergeProgrammeSelection(base), assignments: [] };
+        });
+      })
+      .catch(function () {
+        return listUccProgrammes().then(function (base) {
+          return { programmes: mergeProgrammeSelection(base), assignments: [] };
+        });
+      });
+  }
+
+  function updateLecturerProfile(payload) {
+    return apiFetch("/api/auth/profile", {
+      method: "PATCH",
+      body: payload || {}
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result.ok && result.lecturer) {
+          var session = getSession() || {};
+          session.lecturer = result.lecturer;
+          if (result.programmeIds) session.programmeIds = result.programmeIds;
+          if (result.state) applyState(result.state);
+          saveSession(session);
+        }
+        return result;
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
   global.Attendify = {
     load: load,
     ready: ready,
     classById: classById,
     studentsFor: studentsFor,
     findStudent: findStudent,
+    resolveStudentIndexSuffix: resolveStudentIndexSuffix,
+    saveLiveScanSession: saveLiveScanSession,
+    getLiveScanSession: getLiveScanSession,
+    clearLiveScanSession: clearLiveScanSession,
+    isLiveScanSessionStillOpen: isLiveScanSessionStillOpen,
     addStudent: addStudent,
+    deleteStudent: deleteStudent,
     qrText: qrText,
     parseQr: parseQr,
     startAttendanceSession: startAttendanceSession,
@@ -1050,9 +1648,17 @@
     courseById: courseById,
     findSessionForCourseWeek: findSessionForCourseWeek,
     addProgrammeCourse: addProgrammeCourse,
+    updateProgrammeCourse: updateProgrammeCourse,
+    deleteProgrammeCourse: deleteProgrammeCourse,
     attendanceRows: attendanceRows,
     enrollUrl: enrollUrl,
+    refreshShareOrigin: refreshShareOrigin,
+    publicShareOrigin: publicShareOrigin,
+    scanShareUrl: scanShareUrl,
+    displayShareUrl: displayShareUrl,
     createTaShareLink: createTaShareLink,
+    updateLecturerProfile: updateLecturerProfile,
+    fetchLecturerProgrammeCatalogue: fetchLecturerProgrammeCatalogue,
     activeSessionFor: activeSessionFor,
     photoFromFile: photoFromFile,
     uccPhotoUrl: uccPhotoUrl,
@@ -1062,17 +1668,32 @@
     avatarMarkup: avatarMarkup,
     hydrateAvatars: hydrateAvatars,
     onAvatarError: onAvatarError,
+    paintLecturerChrome: paintLecturerChrome,
+    lecturerAvatarPerson: lecturerAvatarPerson,
     initials: initials,
     downloadCsv: downloadCsv,
     printAttendanceReport: printAttendanceReport,
     formatTime: formatTime,
+    formatStudentLevel: formatStudentLevel,
     drawQr: drawQr,
     requestedClassId: requestedClassId,
     today: today,
     dashboardStats: dashboardStats,
     classStats: classStats,
+    courseStats: courseStats,
     semesterInfo: semesterInfo,
     addClass: addClass,
+    listUccProgrammes: listUccProgrammes,
+    previewUccProgrammeRoster: previewUccProgrammeRoster,
+    signupLecturer: signupLecturer,
+    loginLecturer: loginLecturer,
+    logoutLecturer: logoutLecturer,
+    getSession: getSession,
+    currentLecturerId: currentLecturerId,
+    requireLecturerSession: requireLecturerSession,
+    validateSession: validateSession,
+    saveSession: saveSession,
+    clearSession: clearSession,
     updateProgramme: updateProgramme,
     deleteProgramme: deleteProgramme,
     programmeAttendanceSessions: programmeAttendanceSessions,

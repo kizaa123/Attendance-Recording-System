@@ -10,6 +10,7 @@
   var lastScanAt = 0;
   var lectureLabel = "";
   var cameraFacing = "environment";
+  var cameraStarting = false;
 
   function esc(value) {
     return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
@@ -57,6 +58,58 @@
     return isWeekClosed(selectedWeek);
   }
 
+  function isWeekSessionActive(week) {
+    return sessionHasRecords(week) && !isWeekClosed(week);
+  }
+
+  function statusLabelForExport(scanned, week) {
+    if (scanned) return "Present";
+    if (isWeekClosed(week)) return "Absent";
+    if (sessionHasRecords(week)) return "Waiting";
+    return "—";
+  }
+
+  function statusBadgeHtml(scanned, week) {
+    if (scanned) {
+      return '<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 shadow-xs">Present ✓</span>';
+    }
+    if (isWeekClosed(week)) {
+      return '<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold text-rose-800 bg-rose-100 border border-rose-300 shadow-xs">Absent ✕</span>';
+    }
+    if (sessionHasRecords(week)) {
+      return '<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 shadow-xs">Waiting…</span>';
+    }
+    return '<span class="text-slate-400">—</span>';
+  }
+
+  function updateAbsentStatCard(sessionActive) {
+    var card = document.getElementById("course-stat-absent-card");
+    var label = document.getElementById("course-stat-absent-label");
+    var value = document.getElementById("course-stat-absent");
+    if (!card || !value) return;
+    if (sessionActive) {
+      card.classList.remove("border-t-slate-300", "border-t-rose-500");
+      card.classList.add("border-t-amber-400");
+      if (label) {
+        label.textContent = "Waiting";
+        label.classList.remove("text-slate-400");
+        label.classList.add("text-amber-800");
+      }
+      value.classList.remove("text-slate-700", "text-rose-700");
+      value.classList.add("text-amber-700");
+    } else {
+      card.classList.remove("border-t-amber-400");
+      card.classList.add("border-t-rose-500");
+      if (label) {
+        label.textContent = "Absent";
+        label.classList.remove("text-amber-800");
+        label.classList.add("text-slate-400");
+      }
+      value.classList.remove("text-amber-700");
+      value.classList.add("text-rose-700");
+    }
+  }
+
   function updateTakeAttendanceUi() {
     var btn = document.getElementById("btn-take-attendance");
     if (!btn) return;
@@ -78,9 +131,15 @@
     var el = document.getElementById("course-week-banner");
     if (!el) return;
     if (isSelectedWeekClosed()) {
-      el.textContent = "Week " + selectedWeek + " — session ended. No further attendance for this week.";
+      el.textContent = "Week " + selectedWeek + " — session ended. Unscanned students are marked absent.";
       el.classList.add("text-slate-700", "bg-slate-100", "border-slate-300");
       el.classList.remove("text-amber-800", "bg-amber-50", "border-amber-100", "text-slate-600", "bg-slate-50", "border-slate-200");
+      return;
+    }
+    if (isWeekSessionActive(selectedWeek)) {
+      el.textContent = "Week " + selectedWeek + " - session in progress.";
+      el.classList.add("text-amber-800", "bg-amber-50", "border-amber-100");
+      el.classList.remove("text-slate-600", "bg-slate-50", "border-slate-200", "text-slate-700", "bg-slate-100", "border-slate-300");
       return;
     }
     var latest = latestWeekWithRecords();
@@ -117,8 +176,9 @@
       return {
         name: student.name,
         index: student.index,
-        status: scanned ? "Present" : sessionHasRecords(selectedWeek) ? "Absent" : "—",
-        time: scanned ? Attendify.formatTime(scanned) : ""
+        level: Attendify.formatStudentLevel(student),
+        status: statusLabelForExport(scanned, selectedWeek),
+        time: scanned ? Attendify.formatTime(scanned) : "—"
       };
     });
   }
@@ -130,9 +190,9 @@
       window.alert("No attendance recorded for Week " + selectedWeek + " yet.");
       return;
     }
-    var rows = [["Name", "Index", "Status", "Scanned at"]];
+    var rows = [["Student name", "Index no.", "Level", "Status", "Time"]];
     weekExportRows().forEach(function (row) {
-      rows.push([row.name, row.index, row.status, row.time || "—"]);
+      rows.push([row.name, row.index, row.level, row.status, row.time]);
     });
     var code = String(pair.course.code || "course").replace(/\s+/g, "-");
     Attendify.downloadCsv(code + "-week-" + selectedWeek + "-attendance.csv", rows);
@@ -209,28 +269,44 @@
     return sessionHasRecords(week) || isWeekClosed(week);
   }
 
-  function renderStats(enrolled, presentCount, absentCount, rosterVisible, scanning) {
+  function updateWeekStatCard() {
+    var totalWeeks = Attendify.semesterInfo().totalWeeks || 15;
+    var valueEl = document.getElementById("course-stat-week-value");
+    if (valueEl) valueEl.textContent = String(selectedWeek) + "/" + String(totalWeeks);
+  }
+
+  function renderStats(enrolled, presentCount, absentCount, rosterVisible, scanning, sessionActive) {
     document.getElementById("course-stat-enrolled").textContent = String(enrolled);
     if (!rosterVisible) {
+      updateAbsentStatCard(false);
       if (scanning && enrolled) {
         document.getElementById("course-stat-present").textContent = String(presentCount);
         document.getElementById("course-stat-absent").textContent = "—";
         document.getElementById("course-stat-present-note").textContent = "Week " + selectedWeek + " · scanning";
         document.getElementById("course-stat-absent-note").textContent = "Roster appears after the first scan";
+        updateWeekStatCard();
         return;
       }
       document.getElementById("course-stat-present").textContent = "—";
       document.getElementById("course-stat-absent").textContent = "—";
       document.getElementById("course-stat-present-note").textContent = "Week " + selectedWeek + " · not started";
       document.getElementById("course-stat-absent-note").textContent = "Take attendance to record this week";
+      updateWeekStatCard();
       return;
     }
+    updateAbsentStatCard(!!sessionActive);
     document.getElementById("course-stat-present").textContent = String(presentCount);
     document.getElementById("course-stat-absent").textContent = String(absentCount);
     document.getElementById("course-stat-present-note").textContent =
       "Week " + selectedWeek + (enrolled ? " · " + Math.round((presentCount / enrolled) * 1000) / 10 + "% turnout" : "");
-    document.getElementById("course-stat-absent-note").textContent =
-      enrolled ? "Week " + selectedWeek + " · not yet scanned" : "No students on programme";
+    document.getElementById("course-stat-absent-note").textContent = sessionActive
+      ? enrolled
+        ? "Week " + selectedWeek + " · session open · not scanned yet"
+        : "No students on programme"
+      : enrolled
+        ? "Week " + selectedWeek + " · session ended · absent"
+        : "No students on programme";
+    updateWeekStatCard();
   }
 
   function renderTable() {
@@ -271,36 +347,48 @@
       .map(function (student) {
         var scanned = present[student.id];
         if (scanned) presentCount += 1;
-        var status = scanned
-          ? '<span class="inline-flex items-center gap-1 text-emerald-700 font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Present</span>'
-          : '<span class="text-slate-500 font-medium">Absent</span>';
+        var status = statusBadgeHtml(scanned, selectedWeek);
         var timeCell = scanned
           ? '<span class="font-mono text-slate-700 tabular-nums">' + esc(Attendify.formatTime(scanned)) + "</span>"
           : '<span class="text-slate-300">—</span>';
+        var listUi = window.AttendifyStudentList;
+        var mobileIdentity =
+          listUi && listUi.identityHtml
+            ? listUi.identityHtml(student, {
+                index: true,
+                extra: scanned ? Attendify.formatTime(scanned) : ""
+              })
+            : esc(student.name);
         return (
-          "<tr class=\"border-t border-slate-100\">" +
-          '<td class="py-2.5 px-4">' +
-          '<div class="flex items-center gap-3 min-w-0">' +
+          '<tr class="student-roster-row border-t border-slate-100">' +
+          '<td class="py-2.5 px-4 student-roster-main">' +
+          '<div class="student-roster-mobile-only">' +
+          mobileIdentity +
+          "</div>" +
+          '<div class="hidden md:flex md:items-center md:gap-3 min-w-0">' +
           studentAvatarCell(student) +
           '<span class="font-semibold text-slate-800 truncate">' +
           esc(student.name) +
           "</span></div></td>" +
-          '<td class="py-2.5 px-4 font-mono text-slate-600">' +
+          '<td class="student-roster-index py-2.5 px-4 font-mono text-slate-600">' +
           esc(student.index) +
           "</td>" +
-          '<td class="py-2.5 px-4 text-xs">' +
+          '<td class="student-roster-status-col py-2.5 px-4 text-xs">' +
           status +
           "</td>" +
-          '<td class="py-2.5 px-4 text-right text-xs">' +
+          '<td class="student-roster-time-col py-2.5 px-4 text-right text-xs">' +
           timeCell +
           "</td></tr>"
         );
       })
       .join("");
-    renderStats(enrolled, presentCount, enrolled - presentCount, true, scanning);
+    var sessionActive = isWeekSessionActive(selectedWeek);
+    var notScanned = enrolled - presentCount;
+    renderStats(enrolled, presentCount, notScanned, true, scanning, sessionActive);
     updateWeekBanner();
     updateTakeAttendanceUi();
     Attendify.hydrateAvatars(body);
+    updateLiveScanBanner();
   }
 
   function removeScanForStudent(studentId) {
@@ -319,9 +407,29 @@
 
   function handleScanResult(result) {
     if (!result.ok) {
-      var msg = result.message || result.error || "This card is not on the programme roster.";
-      if (result.error === "session_closed") closeScanner();
-      window.alert(msg);
+      if (
+        window.AttendifyScannerHud &&
+        AttendifyScannerHud.isUnregisteredScan &&
+        AttendifyScannerHud.isUnregisteredScan(result)
+      ) {
+        AttendifyScannerHud.showUnknown();
+        return;
+      }
+      if (result.error === "session_closed" && window.AttendifyScannerHud && AttendifyScannerHud.showScanMessage) {
+        AttendifyScannerHud.showScanMessage(
+          result.message || "Attendance for this week has ended.",
+          "warning",
+          true
+        );
+        setTimeout(closeScanner, 2700);
+        return;
+      }
+      var msg = result.message || result.error || "Could not record this scan.";
+      if (window.AttendifyScannerHud && AttendifyScannerHud.showScanMessage) {
+        AttendifyScannerHud.showScanMessage(msg, "error", true);
+      } else if (window.AttendifyScannerHud && AttendifyScannerHud.playError) {
+        AttendifyScannerHud.playError();
+      }
       return;
     }
     renderLive(selectedWeek);
@@ -337,7 +445,7 @@
 
   function onScan(text) {
     var now = Date.now();
-    if (text === lastCode && now - lastScanAt < 2000) return;
+    if (text === lastCode && now - lastScanAt < 550) return;
     lastCode = text;
     lastScanAt = now;
     var parsed = Attendify.parseQr(text);
@@ -346,61 +454,157 @@
     Attendify.markPresent(programmeId, index, qrToken, lectureLabel, selectedWeek).then(handleScanResult);
   }
 
-  function simulateScan() {
-    var rows = Attendify.attendanceRows(programmeId, lectureLabel, selectedWeek);
-    var marked = {};
-    rows.forEach(function (row) {
-      marked[row.student.id] = true;
+  function persistLiveScanFromCourse(week) {
+    if (!Attendify.saveLiveScanSession || !programmeId || !courseId) return;
+    Attendify.saveLiveScanSession({
+      source: "course",
+      classId: programmeId,
+      courseId: courseId,
+      weekNumber: week != null ? week : selectedWeek,
+      lectureName: lectureLabel,
+      sessionId: activeCourseSessionId || null,
+      teachLevel: "",
+      returnUrl:
+        "course.html?programme=" + encodeURIComponent(programmeId) + "&course=" + encodeURIComponent(courseId)
     });
-    var students = Attendify.studentsFor(programmeId);
-    if (!students.length) {
-      window.alert("No students registered on this programme yet.");
+  }
+
+  function hudScanMessage(text, kind, playErr) {
+    if (window.AttendifyScannerHud && AttendifyScannerHud.showScanMessage) {
+      AttendifyScannerHud.showScanMessage(text, kind || "info", playErr !== false);
+    }
+  }
+
+  function submitManualIndexSuffix() {
+    var errEl = document.getElementById("manual-index-error");
+    var input = document.getElementById("manual-index-suffix");
+    if (errEl) errEl.classList.add("hidden");
+    var resolved = Attendify.resolveStudentIndexSuffix(programmeId, input ? input.value : "", null);
+    if (!resolved.ok) {
+      if (errEl) errEl.classList.add("hidden");
+      if (window.AttendifyScannerHud && AttendifyScannerHud.showUnknown) {
+        AttendifyScannerHud.showUnknown();
+      }
       return;
     }
-    var next = null;
-    var i;
-    for (i = 0; i < students.length; i++) {
-      if (!marked[students[i].id]) {
-        next = students[i];
-        break;
+    Attendify.markPresent(programmeId, resolved.index, null, lectureLabel, selectedWeek).then(function (result) {
+      if (result.ok && input) {
+        input.value = "";
+        input.focus();
       }
+      handleScanResult(result);
+    });
+  }
+
+  function updateLiveScanBanner() {
+    var banner = document.getElementById("live-scan-banner");
+    var textEl = document.getElementById("live-scan-banner-text");
+    if (!banner || !textEl || !Attendify.getLiveScanSession) return;
+    var live = Attendify.getLiveScanSession();
+    if (
+      !live ||
+      live.classId !== programmeId ||
+      String(live.courseId || "") !== String(courseId || "") ||
+      !Attendify.isLiveScanSessionStillOpen(live)
+    ) {
+      banner.classList.add("hidden");
+      if (
+        live &&
+        live.classId === programmeId &&
+        String(live.courseId || "") === String(courseId || "") &&
+        !Attendify.isLiveScanSessionStillOpen(live) &&
+        Attendify.clearLiveScanSession
+      ) {
+        Attendify.clearLiveScanSession();
+      }
+      return;
     }
-    if (!next) next = students[0];
-    onScan(Attendify.qrText(next));
+    textEl.textContent = "Week " + live.weekNumber + " - session in progress.";
+    banner.classList.remove("hidden");
+  }
+
+  function stopCamera() {
+    var current = scanner;
+    scanner = null;
+    cameraStarting = false;
+    if (window.AttendifyScannerHud && AttendifyScannerHud.releaseCamera) {
+      return AttendifyScannerHud.releaseCamera(current, "qr-reader");
+    }
+    if (current && current.isScanning) {
+      return current
+        .stop()
+        .then(function () {
+          return current.clear();
+        })
+        .catch(function () {});
+    }
+    return Promise.resolve();
   }
 
   function startCamera() {
+    if (cameraStarting) return;
     if (typeof Html5Qrcode === "undefined") {
-      window.alert("Scanner library did not load. Check your connection.");
+      hudScanMessage("Scanner library did not load. Check your connection.", "error", true);
       return;
     }
-    var config = { fps: 10, qrbox: { width: 240, height: 240 } };
-    scanner = new Html5Qrcode("qr-reader");
-    scanner
-      .start({ facingMode: cameraFacing }, config, onScan, function () {})
-      .catch(function () {
-        cameraFacing = cameraFacing === "environment" ? "user" : "environment";
-        scanner = new Html5Qrcode("qr-reader");
-        return scanner.start({ facingMode: cameraFacing }, config, onScan, function () {});
+    if (window.AttendifyScannerHud && AttendifyScannerHud.isCameraContextOk && !AttendifyScannerHud.isCameraContextOk()) {
+      hudScanMessage(
+        AttendifyScannerHud.cameraContextHint
+          ? AttendifyScannerHud.cameraContextHint()
+          : "Camera not available in this context.",
+        "warning",
+        true
+      );
+      return;
+    }
+    var Hud = window.AttendifyScannerHud;
+    if (!Hud || !Hud.startQrCamera) {
+      hudScanMessage("Scanner failed to initialize.", "error", true);
+      return;
+    }
+    cameraStarting = true;
+    var facing = cameraFacing === "environment" ? "environment" : "user";
+    stopCamera()
+      .then(function () {
+        return Hud.startQrCamera({
+          readerId: "qr-reader",
+          facing: facing,
+          onScan: onScan,
+          onScanner: function (instance) {
+            scanner = instance;
+          }
+        });
+      })
+      .then(function (result) {
+        cameraStarting = false;
+        if (result && result.facing) cameraFacing = result.facing;
       })
       .catch(function () {
-        window.alert("Camera unavailable. Allow camera access, or use Simulate scan.");
+        cameraStarting = false;
+        scanner = null;
+        hudScanMessage(
+          Hud.cameraContextHint ? Hud.cameraContextHint() : "Camera unavailable. Use manual entry or tap ↻ to retry.",
+          "warning",
+          true
+        );
       });
   }
 
   function flipCamera() {
     cameraFacing = cameraFacing === "environment" ? "user" : "environment";
-    stopCamera();
-    setTimeout(startCamera, 200);
+    stopCamera().then(function () {
+      setTimeout(startCamera, 120);
+    });
   }
 
-  function stopCamera() {
-    if (!scanner) return;
-    var current = scanner;
-    scanner = null;
-    if (current.isScanning) {
-      current.stop().then(function () { return current.clear(); }).catch(function () {});
-    }
+  function openScannerCameraAfterLayout() {
+    stopCamera().then(function () {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          startCamera();
+        });
+      });
+    });
   }
 
   var activeCourseSessionId = null;
@@ -445,10 +649,16 @@
         return;
       }
       currentTaShareUrl = res.url;
+      var label = res.displayUrl || (Attendify.displayShareUrl ? Attendify.displayShareUrl(res.url) : res.url);
       if (input) input.value = res.url;
       if (anchor) {
-        anchor.textContent = res.url;
+        anchor.textContent = label;
         anchor.href = res.url;
+      }
+      var openBtn = document.getElementById("ta-share-open");
+      if (openBtn) {
+        openBtn.href = res.url;
+        openBtn.classList.remove("pointer-events-none", "opacity-50");
       }
       if (qrContainer && typeof QRCode !== "undefined") {
         qrContainer.innerHTML = "";
@@ -471,7 +681,9 @@
     selectedWeek = Number(week) || 1;
     activeCourseSessionId = sessionId || null;
     if (isWeekClosed(selectedWeek)) {
-      window.alert("Attendance for Week " + selectedWeek + " has ended.");
+      scannerModal.classList.remove("hidden");
+      hudScanMessage("Attendance for Week " + selectedWeek + " has ended.", "warning", true);
+      setTimeout(closeScanner, 2700);
       updateTakeAttendanceUi();
       return;
     }
@@ -486,19 +698,25 @@
     AttendifyScannerHud.hideVerified();
     renderTable();
     renderLive(selectedWeek);
-    stopCamera();
-    setTimeout(startCamera, 200);
+    openScannerCameraAfterLayout();
 
     if (showShareModalImmediately) {
       setTimeout(openTaShareModal, 350);
     }
+    persistLiveScanFromCourse(selectedWeek);
+    var manualErr = document.getElementById("manual-index-error");
+    var manualInput = document.getElementById("manual-index-suffix");
+    if (manualErr) manualErr.classList.add("hidden");
+    if (manualInput) manualInput.value = "";
   }
 
   function closeScanner() {
     stopCamera();
     scannerModal.classList.add("hidden");
+    persistLiveScanFromCourse(selectedWeek);
     Attendify.ready().then(function () {
       renderTable();
+      updateLiveScanBanner();
     });
   }
 
@@ -600,24 +818,51 @@
   document.getElementById("btn-save-session").addEventListener("click", function () {
     Attendify.closeAttendanceSession(programmeId, lectureLabel, selectedWeek, courseId).then(function (result) {
       if (!result || !result.ok) {
-        window.alert((result && (result.message || result.error)) || "Could not end the session.");
+        hudScanMessage(
+          (result && (result.message || result.error)) || "Could not end the session.",
+          "error",
+          true
+        );
         return;
       }
+      if (Attendify.clearLiveScanSession) Attendify.clearLiveScanSession();
       closeScanner();
       updateTakeAttendanceUi();
       updateWeekBanner();
       renderTable();
+      updateLiveScanBanner();
     });
   });
   document.getElementById("btn-view-roster").addEventListener("click", function () {
     closeScanner();
+    updateLiveScanBanner();
     var table = document.getElementById("course-roster-body");
     if (table) {
       var section = table.closest(".bg-white");
       if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   });
-  document.getElementById("btn-scan-simulate").addEventListener("click", simulateScan);
+  var manualIndexForm = document.getElementById("manual-index-form");
+  if (manualIndexForm) {
+    manualIndexForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      submitManualIndexSuffix();
+    });
+  }
+  var continueScanBtn = document.getElementById("btn-continue-live-scan");
+  if (continueScanBtn) {
+    continueScanBtn.addEventListener("click", function () {
+      var live = Attendify.getLiveScanSession();
+      if (!live || !live.returnUrl) return;
+      if (live.weekNumber != null) {
+        selectedWeek = Number(live.weekNumber) || selectedWeek;
+        var weekFilter = document.getElementById("course-week-filter");
+        if (weekFilter) weekFilter.value = String(selectedWeek);
+      }
+      var sid = live.sessionId || null;
+      openScanner(selectedWeek, sid, false);
+    });
+  }
   document.getElementById("btn-scan-flip").addEventListener("click", flipCamera);
 
   Attendify.ready().then(function () {
@@ -634,12 +879,28 @@
     updateTakeAttendanceUi();
     renderTable();
 
+    var resumeParams = new URLSearchParams(window.location.search);
+    if (resumeParams.get("resumeScan") === "1" && Attendify.getLiveScanSession) {
+      var liveResume = Attendify.getLiveScanSession();
+      if (
+        liveResume &&
+        liveResume.classId === programmeId &&
+        String(liveResume.courseId || "") === String(courseId) &&
+        Attendify.isLiveScanSessionStillOpen(liveResume)
+      ) {
+        selectedWeek = Number(liveResume.weekNumber) || selectedWeek;
+        document.getElementById("course-week-filter").value = String(selectedWeek);
+        openScanner(selectedWeek, liveResume.sessionId || null, false);
+      }
+    }
+
     // Periodic poll to sync TA scans and update the week attendance table live
     setInterval(function () {
       Attendify.ready().then(function () {
         renderTable();
         updateWeekBanner();
         updateTakeAttendanceUi();
+        updateLiveScanBanner();
         if (isScannerOpen()) {
           renderLive(selectedWeek);
         }

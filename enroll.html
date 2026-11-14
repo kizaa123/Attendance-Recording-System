@@ -34,6 +34,16 @@
           </div>
           <p id="ucc-photo-status" class="text-xs text-slate-500 mt-3 text-center max-w-xs"></p>
         </div>
+        <label class="block text-xs font-semibold text-slate-600">Level / class
+          <select id="student-level" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
+            <option value="" disabled selected>Select level</option>
+            <option value="100">Level 100</option>
+            <option value="200">Level 200</option>
+            <option value="300">Level 300</option>
+            <option value="400">Level 400</option>
+            <option value="500">Level 500 / PG</option>
+          </select>
+        </label>
         <label class="block text-xs font-semibold text-slate-600">Index number
           <input id="index" required placeholder="e.g. PS/ITC/24/0254" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500">
         </label>
@@ -58,7 +68,7 @@
     </section>
   </main>
   <script src="js/qrcode.min.js"></script>
-  <script src="js/store.js?v=18"></script>
-  <script src="js/enroll.js?v=4"></script>
+  <script src="js/store.js?v=24"></script>
+  <script src="js/enroll.js?v=5"></script>
 </body>
 </html>
