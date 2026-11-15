@@ -992,12 +992,40 @@ function hashPassword(password, salt) {
 }
 
 function verifyPassword(password, salt, expectedHash) {
-  const hash = crypto.scryptSync(String(password), salt, 64).toString("hex");
+  if (salt == null || expectedHash == null || String(expectedHash).length < 32) {
+    return false;
+  }
+  const hash = crypto.scryptSync(String(password), String(salt), 64).toString("hex");
   try {
-    return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(expectedHash, "hex"));
+    return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(String(expectedHash), "hex"));
   } catch (_) {
     return false;
   }
+}
+
+function passwordMatches(inputPassword, salt, expectedHash) {
+  const raw = String(inputPassword == null ? "" : inputPassword);
+  const trimmed = raw.trim();
+  if (verifyPassword(raw, salt, expectedHash)) return true;
+  if (trimmed !== raw && verifyPassword(trimmed, salt, expectedHash)) return true;
+  return false;
+}
+
+function findLecturerAuthRow(username) {
+  const needle = String(username || "").trim().toLowerCase();
+  if (!needle) return null;
+  let row = db
+    .prepare(
+      "SELECT id, username, password_hash, salt, full_name, photo, created_at FROM lecturers WHERE username = ? COLLATE NOCASE"
+    )
+    .get(needle);
+  if (row) return row;
+  row = db
+    .prepare(
+      "SELECT id, username, password_hash, salt, full_name, photo, created_at FROM lecturers WHERE lower(trim(username)) = ?"
+    )
+    .get(needle);
+  return row || null;
 }
 
 function normalizeLecturerPhoto(value) {
@@ -1219,7 +1247,10 @@ function addClass(input) {
 }
 
 function validateLecturerUsername(raw) {
-  const username = String(raw || "").trim().toLowerCase();
+  const username = String(raw || "")
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase();
   if (!username || username.length < 3) {
     return { ok: false, error: "Choose a username with at least 3 characters." };
   }
@@ -1237,7 +1268,7 @@ function signupLecturer(input) {
   const usernameCheck = validateLecturerUsername((input && input.username) || "");
   if (!usernameCheck.ok) return usernameCheck;
   const username = usernameCheck.username;
-  const password = String((input && input.password) || "");
+  const password = String((input && input.password) || "").trim();
   const fullName = String((input && input.fullName) || "").trim();
   if (password.length < 6) {
     return { ok: false, error: "Password must be at least 6 characters." };
@@ -1374,15 +1405,11 @@ function loginLecturer(input) {
   }
   const username = usernameCheck.username;
   const password = String((input && input.password) || "");
-  if (!password) {
+  if (!password.trim()) {
     return { ok: false, error: "Enter your username and password." };
   }
 
-  const row = db
-    .prepare(
-      "SELECT id, username, password_hash, salt, full_name, photo, created_at FROM lecturers WHERE username = ? COLLATE NOCASE"
-    )
-    .get(username);
+  const row = findLecturerAuthRow(username);
 
   // Demo accounts (no DB row required) for first demos
   if (!row) {
@@ -1409,7 +1436,7 @@ function loginLecturer(input) {
     };
   }
 
-  if (!verifyPassword(password, row.salt, row.password_hash)) {
+  if (!passwordMatches(password, row.salt, row.password_hash)) {
     return { ok: false, error: "Invalid username or password." };
   }
 

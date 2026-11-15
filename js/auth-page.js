@@ -184,8 +184,13 @@
     loginForm.addEventListener("submit", function (e) {
       e.preventDefault();
       hideLoginError();
-      var username = usernameInput ? String(usernameInput.value || "").trim().toLowerCase() : "";
-      var password = passwordInput ? passwordInput.value : "";
+      var username = usernameInput
+        ? String(usernameInput.value || "")
+            .normalize("NFKC")
+            .trim()
+            .toLowerCase()
+        : "";
+      var password = passwordInput ? String(passwordInput.value || "") : "";
       var selectedProgram = programmeSelect ? programmeSelect.value : "";
       if (!username) {
         showLoginError("Please enter your username.");
@@ -207,7 +212,12 @@
         if (submitBtn) submitBtn.disabled = false;
         if (submitText) submitText.textContent = "Sign In";
         if (!result.ok) {
-          showLoginError(result.error || "Could not sign in.");
+          var msg = result.error || "Could not sign in.";
+          if (msg.indexOf("Invalid username or password") !== -1) {
+            msg =
+              "Invalid username or password. Use the same username you chose at signup (not your full name), and check caps lock.";
+          }
+          showLoginError(msg);
           return;
         }
         if (rememberInput && rememberInput.checked) {
@@ -240,6 +250,15 @@
           AttendifyPageTransitions.markPortalEnter();
         }
         window.location.replace(dest);
+      })
+      .catch(function () {
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitText) submitText.textContent = "Sign In";
+        showLoginError(
+          typeof Attendify !== "undefined" && Attendify.connectionHint
+            ? Attendify.connectionHint()
+            : "Could not reach the server. Start Attendify with node server.js and use the same address in your browser."
+        );
       });
     });
   }
@@ -668,6 +687,15 @@
           showSignupError(result.error || "Could not create your account.");
           return;
         }
+        try {
+          localStorage.setItem(
+            "attendify-login",
+            JSON.stringify({
+              username: username,
+              programme: result.classId || ""
+            })
+          );
+        } catch (_) {}
         if (window.AttendifyPageTransitions && AttendifyPageTransitions.markPortalEnter) {
           AttendifyPageTransitions.markPortalEnter();
         }

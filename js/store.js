@@ -19,6 +19,24 @@
     return path;
   }
 
+  function authApiUrl(path) {
+    var p = String(path || "");
+    if (p.indexOf("/") !== 0) p = "/" + p;
+    if (window.location.protocol === "file:") return API_BASE + p;
+    return window.location.origin + p;
+  }
+
+  function parseJsonResponse(response) {
+    return response.text().then(function (text) {
+      if (!text) return { ok: false, error: connectionHint() };
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        return { ok: false, error: connectionHint() };
+      }
+    });
+  }
+
   function rememberShareOrigins(host) {
     if (!host) return;
     var pick = "";
@@ -35,12 +53,16 @@
 
   function connectionHint() {
     if (window.location.protocol === "file:") {
-      return "Unable to connect. Open Attendify using the link from your institution.";
+      return "Unable to connect. Open Attendify in your browser at the address from node server.js (not by opening the HTML file directly).";
     }
-    if (window.location.port && window.location.port !== DEFAULT_PORT) {
-      return "Unable to connect. Use the official Attendify address you were given.";
+    if (window.location.protocol !== "file:" && window.location.origin) {
+      return (
+        "Unable to connect to the server at " +
+        window.location.origin +
+        ". Run node server.js in the project folder and open that same address."
+      );
     }
-    return "Unable to connect right now. Check your network and try again.";
+    return "Unable to connect right now. Run node server.js and open the Local or Network URL it prints.";
   }
 
   function seedStudents() {
@@ -1678,14 +1700,15 @@
     payload = payload || {};
     var body = Object.assign({}, payload);
     if (body.username != null) body.username = String(body.username).trim().toLowerCase();
-    return fetch(apiUrl("/api/auth/signup"), {
+    if (body.password != null) body.password = String(body.password).trim();
+    return fetch(authApiUrl("/api/auth/signup"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       credentials: "same-origin"
     })
       .then(function (response) {
-        return response.json();
+        return parseJsonResponse(response);
       })
       .then(function (result) {
         if (result.state) applyState(result.state);
@@ -1700,18 +1723,21 @@
   function loginLecturer(payload) {
     payload = payload || {};
     var body = {
-      username: String(payload.username || "").trim().toLowerCase(),
+      username: String(payload.username || "")
+        .normalize("NFKC")
+        .trim()
+        .toLowerCase(),
       password: String(payload.password || "")
     };
     if (payload.programmeId) body.programmeId = payload.programmeId;
-    return fetch(apiUrl("/api/auth/login"), {
+    return fetch(authApiUrl("/api/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       credentials: "same-origin"
     })
       .then(function (response) {
-        return response.json();
+        return parseJsonResponse(response);
       })
       .then(function (result) {
         if (result.state) applyState(result.state);
@@ -1845,6 +1871,7 @@
   global.Attendify = {
     load: load,
     ready: ready,
+    connectionHint: connectionHint,
     classById: classById,
     studentsFor: studentsFor,
     findStudent: findStudent,
