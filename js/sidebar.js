@@ -62,6 +62,7 @@
       '<svg id="sidebar-courses-chevron" class="w-4 h-4 shrink-0 text-slate-400 transition-transform ' + (expanded ? "rotate-180" : "") + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>' +
       '<span class="text-sm font-semibold truncate">Programmes</span>' +
       "</button>" +
+      '<button type="button" data-action="add-programme" id="sidebar-add-programme" title="Add programme" aria-label="Add programme" class="w-7 h-7 shrink-0 rounded-md bg-brand-700/80 hover:bg-tealAccent-600 text-white text-sm font-bold leading-none flex items-center justify-center">+</button>' +
       "</div>" +
       '<div id="sidebar-courses-list" class="sidebar-courses-list mt-1 space-y-0.5 overflow-hidden ' + (expanded ? "" : "hidden") + '"></div>' +
       "</div>" +
@@ -81,7 +82,7 @@
     var currentCourse = activeCourseId();
     if (!classes.length) {
       list.innerHTML =
-        '<p class="pl-8 pr-2 py-2 text-[11px] text-slate-500">No programmes yet. Tap <strong class="text-slate-400">+</strong> to create one.</p>';
+        '<p class="pl-8 pr-2 py-2 text-[11px] text-slate-500">No programmes yet. Tap <strong class="text-slate-400">+</strong> beside Programmes to add one.</p>';
       return;
     }
     list.innerHTML = classes
@@ -305,8 +306,217 @@
     openCreateCourseModal(classId, course);
   }
 
+  var addProgrammeCatalogue = [];
+
+  function assignmentAlreadyOnDashboard(classId, level) {
+    if (!classId || level == null || level === "") return false;
+    return (Attendify.load().classes || []).some(function (row) {
+      return row.id === classId && Number(row.teachLevel) === Number(level);
+    });
+  }
+
+  function rebuildAddProgrammeLevelOptions(keepLevel) {
+    var levelEl = document.getElementById("add-programme-level");
+    var progEl = document.getElementById("add-programme-select");
+    if (!levelEl || !progEl) return;
+    var pick = addProgrammeCatalogue.filter(function (p) {
+      return p.id === progEl.value;
+    })[0];
+    var html = '<option value="" disabled selected>Choose level</option>';
+    if (!pick) {
+      levelEl.innerHTML = html;
+      return;
+    }
+    var max = pick.maxLevel ? Number(pick.maxLevel) : 400;
+    if (!max || max < 400) max = 400;
+    var prev = keepLevel ? levelEl.value : "";
+    for (var lvl = 100; lvl <= max; lvl += 100) {
+      var label = "Level " + lvl;
+      if (lvl >= 500 && max >= 600) {
+        if (lvl === 500) label = "Level 500 / clinical";
+        if (lvl === 600) label = "Level 600 / final";
+      }
+      var taken = assignmentAlreadyOnDashboard(pick.classId, lvl);
+      html +=
+        '<option value="' +
+        lvl +
+        '"' +
+        (taken ? ' disabled title="Already on your dashboard"' : "") +
+        ">" +
+        label +
+        (taken ? " (added)" : "") +
+        "</option>";
+    }
+    levelEl.innerHTML = html;
+    if (prev && Number(prev) <= max && !assignmentAlreadyOnDashboard(pick.classId, Number(prev))) {
+      levelEl.value = prev;
+    }
+  }
+
+  function refreshAddProgrammeRosterNote() {
+    var note = document.getElementById("add-programme-roster-note");
+    var progEl = document.getElementById("add-programme-select");
+    var levelEl = document.getElementById("add-programme-level");
+    if (!note || !progEl || !levelEl || !window.Attendify) return;
+    var uccId = progEl.value;
+    var level = levelEl.value;
+    if (!uccId || !level) {
+      note.classList.add("hidden");
+      note.textContent = "";
+      return;
+    }
+    Attendify.previewUccProgrammeRoster(uccId, level).then(function (preview) {
+      if (!preview || !preview.ok) {
+        note.classList.add("hidden");
+        return;
+      }
+      if (preview.count > 0) {
+        note.textContent =
+          preview.count +
+          " student" +
+          (preview.count === 1 ? "" : "s") +
+          " already registered for " +
+          (preview.programme.code || "this programme") +
+          " at Level " +
+          level +
+          ". They will appear on your roster automatically.";
+        note.classList.remove("hidden");
+      } else {
+        note.textContent =
+          "No students at this level yet — share the registration link from the programme page when you are ready.";
+        note.classList.remove("hidden");
+      }
+    });
+  }
+
+  function ensureAddProgrammeModal() {
+    if (document.getElementById("add-programme-modal")) return;
+    var modal = document.createElement("div");
+    modal.id = "add-programme-modal";
+    modal.className = "hidden fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4";
+    modal.innerHTML =
+      '<div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-6">' +
+      '<h3 class="text-lg font-bold text-slate-900">Add programme</h3>' +
+      '<p class="text-xs text-slate-500 mt-1">Choose the programme and level you teach (same as at sign-up). Existing students at that level join your roster right away.</p>' +
+      '<form id="add-programme-form" class="mt-4 space-y-3">' +
+      '<label class="block text-xs font-semibold text-slate-600">Programme' +
+      '<select id="add-programme-select" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">' +
+      '<option value="" disabled selected>Loading…</option>' +
+      "</select></label>" +
+      '<label class="block text-xs font-semibold text-slate-600">Level' +
+      '<select id="add-programme-level" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">' +
+      '<option value="" disabled selected>Choose level</option>' +
+      "</select></label>" +
+      '<p id="add-programme-roster-note" class="hidden text-[11px] text-teal-800 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2 leading-relaxed"></p>' +
+      '<p id="add-programme-error" class="hidden text-xs font-semibold text-rose-600"></p>' +
+      '<div class="flex justify-end gap-2 pt-1">' +
+      '<button type="button" id="add-programme-cancel" class="px-4 py-2 rounded-xl bg-slate-100 text-xs font-semibold text-slate-700">Cancel</button>' +
+      '<button type="submit" class="px-4 py-2 rounded-xl bg-brand-900 text-white text-xs font-bold">Add to dashboard</button>' +
+      "</div></form></div>";
+    document.body.appendChild(modal);
+    function closeModal() {
+      modal.classList.add("hidden");
+    }
+    modal.addEventListener("click", function (event) {
+      if (event.target === modal) closeModal();
+    });
+    document.getElementById("add-programme-cancel").addEventListener("click", closeModal);
+    var progSelect = document.getElementById("add-programme-select");
+    var levelSelect = document.getElementById("add-programme-level");
+    if (progSelect) {
+      progSelect.addEventListener("change", function () {
+        rebuildAddProgrammeLevelOptions(false);
+        refreshAddProgrammeRosterNote();
+      });
+    }
+    if (levelSelect) {
+      levelSelect.addEventListener("change", refreshAddProgrammeRosterNote);
+    }
+    document.getElementById("add-programme-form").addEventListener("submit", function (event) {
+      event.preventDefault();
+      var err = document.getElementById("add-programme-error");
+      if (err) {
+        err.classList.add("hidden");
+        err.textContent = "";
+      }
+      var uccId = progSelect ? progSelect.value : "";
+      var level = levelSelect ? Number(levelSelect.value) : 0;
+      if (!uccId || !level) {
+        if (err) {
+          err.textContent = "Choose a programme and level.";
+          err.classList.remove("hidden");
+        }
+        return;
+      }
+      Attendify.addLecturerProgramme({ uccProgrammeId: uccId, level: level }).then(function (result) {
+        if (!result.ok) {
+          if (err) {
+            err.textContent = result.error || "Could not add the programme.";
+            err.classList.remove("hidden");
+          }
+          return;
+        }
+        closeModal();
+        setProgrammesOpen(true);
+        if (result.assignment && result.assignment.classId) {
+          setProgrammeOpen(result.assignment.classId, true);
+        }
+        var nav = document.getElementById("faculty-nav");
+        if (nav) renderClassList(nav);
+        window.dispatchEvent(new CustomEvent("attendify:programmes-updated"));
+      });
+    });
+  }
+
+  function openAddProgrammeModal() {
+    ensureAddProgrammeModal();
+    var modal = document.getElementById("add-programme-modal");
+    var err = document.getElementById("add-programme-error");
+    var note = document.getElementById("add-programme-roster-note");
+    if (err) {
+      err.classList.add("hidden");
+      err.textContent = "";
+    }
+    if (note) note.classList.add("hidden");
+    var select = document.getElementById("add-programme-select");
+    if (select) {
+      select.innerHTML = '<option value="" disabled selected>Loading…</option>';
+    }
+    modal.classList.remove("hidden");
+    Attendify.fetchLecturerProgrammeCatalogue().then(function (pack) {
+      addProgrammeCatalogue = (pack && pack.programmes) || [];
+      if (!select) return;
+      if (!addProgrammeCatalogue.length) {
+        select.innerHTML = '<option value="" disabled selected>No programmes found</option>';
+        return;
+      }
+      var html = '<option value="" disabled selected>Choose programme</option>';
+      addProgrammeCatalogue.forEach(function (p) {
+        html +=
+          '<option value="' +
+          escapeHtml(p.id) +
+          '">' +
+          escapeHtml((p.code || "") + " — " + (p.name || "")) +
+          "</option>";
+      });
+      select.innerHTML = html;
+      rebuildAddProgrammeLevelOptions(false);
+    });
+    var levelSelect = document.getElementById("add-programme-level");
+    if (levelSelect) levelSelect.value = "";
+  }
+
   function bindNav(nav) {
     nav.addEventListener("click", function (event) {
+      var addProgramme = event.target.closest("[data-action=add-programme]");
+      if (addProgramme) {
+        event.preventDefault();
+        event.stopPropagation();
+        Attendify.ready().then(function () {
+          openAddProgrammeModal();
+        });
+        return;
+      }
       var addCourse = event.target.closest("[data-action=add-course]");
       if (addCourse) {
         event.preventDefault();
@@ -882,6 +1092,7 @@
     renderShell(nav);
     bindNav(nav);
     ensureCreateCourseModal();
+    ensureAddProgrammeModal();
     ensureMobileAttendancePickerModal();
     if (!window.Attendify) return;
     Attendify.ready().then(function () {
@@ -931,12 +1142,22 @@
     mount();
   }
 
+  document.addEventListener("click", function (event) {
+    if (!event.target.closest("#btn-add-programme-dashboard")) return;
+    event.preventDefault();
+    if (!window.Attendify) return;
+    Attendify.ready().then(function () {
+      openAddProgrammeModal();
+    });
+  });
+
   window.AttendifySidebar = {
     refresh: function () {
       var nav = document.getElementById("faculty-nav");
       if (nav) renderClassList(nav);
     },
     openCreateCourseModal: openCreateCourseModal,
-    openEditCourseModal: openEditCourseModal
+    openEditCourseModal: openEditCourseModal,
+    openAddProgrammeModal: openAddProgrammeModal
   };
 })();

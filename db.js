@@ -877,7 +877,7 @@ function syncLecturerTeachingAssignments(lecturerId, assignments) {
   openDb();
   const lecturer = String(lecturerId || "").trim();
   if (!lecturer || lecturer.indexOf("demo-") === 0) {
-    return { ok: false, error: "Demo accounts use all programmes." };
+    return { ok: false, error: "This action is not available for this account." };
   }
   const list = Array.isArray(assignments) ? assignments : [];
   if (!list.length) {
@@ -929,6 +929,60 @@ function syncLecturerProgrammes(lecturerId, uccProgrammeIds) {
     return { uccProgrammeId: uccId, level: 100 };
   });
   return syncLecturerTeachingAssignments(lecturerId, assignments);
+}
+
+function appendLecturerTeachingAssignment(lecturerId, input) {
+  openDb();
+  const lecturer = String(lecturerId || "").trim();
+  if (!lecturer || lecturer.indexOf("demo-") === 0) {
+    return { ok: false, error: "This action is not available for this account." };
+  }
+  const uccId = String((input && input.uccProgrammeId) || "").trim();
+  const pick = uccProgrammeById(uccId);
+  if (!pick) return { ok: false, error: "Choose a programme from the list." };
+  const level = normalizeStudentLevel(input && input.level);
+  if (level == null) {
+    return { ok: false, error: "Choose a valid level (100, 200, …)." };
+  }
+  if (level > uccProgrammeMaxLevel(pick.code)) {
+    return { ok: false, error: pick.code + " does not include level " + level + "." };
+  }
+  const created = addClass({
+    code: pick.code,
+    name: pick.name,
+    department: pick.department,
+    reuseExisting: true
+  });
+  if (!created.ok) return { ok: false, error: created.error || "Could not link the programme." };
+  const classId = created.classId;
+  const dup = db
+    .prepare("SELECT 1 AS ok FROM lecturer_programmes WHERE lecturer_id = ? AND class_id = ? AND level = ?")
+    .get(lecturer, classId, level);
+  if (dup) {
+    return { ok: false, error: "You already have " + pick.code + " at Level " + level + " on your dashboard." };
+  }
+  db.prepare("INSERT INTO lecturer_programmes (lecturer_id, class_id, level) VALUES (?, ?, ?)").run(
+    lecturer,
+    classId,
+    level
+  );
+  const studentCountAtLevel = countStudentsInClassAtLevel(classId, level);
+  const programmeIds = programmeIdsForLecturer(lecturer);
+  if (programmeIds.length) setSetting("activeClassId", programmeIds[0]);
+  return {
+    ok: true,
+    programmeIds: programmeIds,
+    state: loadState({ lecturerId: lecturer }),
+    assignment: {
+      uccProgrammeId: uccId,
+      classId: classId,
+      level: level,
+      code: pick.code,
+      name: pick.name
+    },
+    studentCountAtLevel: studentCountAtLevel,
+    sharedRoster: studentCountAtLevel > 0
+  };
 }
 
 function hashPassword(password, salt) {
@@ -1185,7 +1239,7 @@ function updateLecturerProfile(input) {
   openDb();
   const lecturerId = String((input && input.lecturerId) || "").trim();
   if (!lecturerId || lecturerId.indexOf("demo-") === 0) {
-    return { ok: false, error: "Demo accounts cannot be edited. Create a real lecturer account to manage your profile." };
+    return { ok: false, error: "Profile changes are not available for this account. Sign up for a personal lecturer account." };
   }
   const row = db
     .prepare(
@@ -2229,6 +2283,7 @@ module.exports = {
   lecturerAssignmentsForApi,
   syncLecturerProgrammes,
   syncLecturerTeachingAssignments,
+  appendLecturerTeachingAssignment,
   signupLecturer,
   loginLecturer,
   updateLecturerProfile,

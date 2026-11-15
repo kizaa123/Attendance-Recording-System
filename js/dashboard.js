@@ -938,11 +938,24 @@ function renderClassCards() {
   });
 }
 
+function isLecturerNameTitle(token) {
+  var t = String(token || "")
+    .replace(/\./g, "")
+    .trim()
+    .toLowerCase();
+  return /^(prof|dr|mr|mrs|ms|miss|rev|sir|madam)$/.test(t);
+}
+
 function dashboardGreetingName(lecturer) {
   if (!lecturer) return "";
-  var raw = lecturer.fullName || lecturer.username || "";
-  var first = String(raw).trim().split(/\s+/)[0];
-  return first || "";
+  var raw = String(lecturer.fullName || lecturer.username || "").trim();
+  if (!raw) return "";
+  var parts = raw.split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  if (parts.length >= 2 && isLecturerNameTitle(parts[0])) {
+    return parts[0] + " " + parts[1];
+  }
+  return parts[0];
 }
 
 function renderDashboard() {

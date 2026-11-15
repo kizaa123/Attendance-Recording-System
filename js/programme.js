@@ -170,16 +170,18 @@ function rosterSignature() {
     .join("\u0002");
 }
 
+function programmeTeachLevel() {
+  if (levelFilter) return String(levelFilter);
+  if (course && course.teachLevel != null && course.teachLevel !== "") return String(course.teachLevel);
+  return "";
+}
+
 function openAddModal(student) {
   editingId = student ? student.id : "";
   document.getElementById("add-title").textContent = student ? "Edit student" : "Register a student";
   document.getElementById("student-name").value = student ? student.name : "";
   document.getElementById("student-index").value = student ? student.index : "";
   document.getElementById("student-email").value = student ? student.email : "";
-  var levelEl = document.getElementById("student-level");
-  if (levelEl) {
-    levelEl.value = student && student.level ? String(student.level) : levelFilter ? String(levelFilter) : "";
-  }
   document.getElementById("ucc-photo-preview").classList.add("hidden");
   document.getElementById("ucc-photo-img").classList.add("hidden");
   document.getElementById("ucc-photo-img").removeAttribute("src");
@@ -229,6 +231,13 @@ document.getElementById("qr-close").addEventListener("click", function () {
 });
 document.getElementById("add-form").addEventListener("submit", function (event) {
   event.preventDefault();
+  syncCourse();
+  var teachLevel = programmeTeachLevel();
+  if (!teachLevel) {
+    document.getElementById("add-error").textContent =
+      "This programme has no teaching level set. Add or fix the programme under Settings first.";
+    return;
+  }
   var index = document.getElementById("student-index").value;
   var photo = uccPhotoForSubmit || Attendify.uccPhotoUrl(index);
   Attendify.addStudent({
@@ -236,7 +245,7 @@ document.getElementById("add-form").addEventListener("submit", function (event) 
     classId: classId,
     name: document.getElementById("student-name").value,
     index: index,
-    level: document.getElementById("student-level") ? document.getElementById("student-level").value : "",
+    level: teachLevel,
     email: document.getElementById("student-email").value,
     photo: photo,
     source: editingId ? undefined : "lecturer"

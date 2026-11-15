@@ -195,36 +195,57 @@
       list.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Scanned students appear here.</p>';
       return;
     }
-    list.innerHTML = rows
-      .map(function (row) {
-        var removeBtn =
-          '<button type="button" data-action="remove-scan" data-student-id="' +
-          esc(row.student.id) +
-          '" class="w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-lg leading-none shrink-0 scan-present-remove" title="Remove">×</button>';
-        var card =
-          global.AttendifyStudentList && AttendifyStudentList.attendanceSessionRosterCard
-            ? global.AttendifyStudentList.attendanceSessionRosterCard(row.student, "present", row.scannedAt, {
-                ring: "ring-2 ring-white",
-                removeButtonHtml: removeBtn
-              })
-            : "";
-        if (!card) {
-          card =
-            '<div class="attendance-session-card attendance-session-card--roster">' +
-            avatarHtml(row.student, "w-11 h-11", "ring-2 ring-white") +
-            '<div class="min-w-0 flex-1"><p class="font-semibold text-slate-900 text-sm truncate">' +
-            esc(row.student.name) +
-            "</p></div></div>";
-        }
-        return (
-          '<div class="scan-present-card" data-student-id="' +
-          esc(row.student.id) +
-          '">' +
-          card +
-          "</div>"
-        );
-      })
-      .join("");
+    var mobileHtml = "";
+    var tableRows = "";
+    rows.forEach(function (row, index) {
+      var removeBtn =
+        '<button type="button" data-action="remove-scan" data-student-id="' +
+        esc(row.student.id) +
+        '" class="w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-lg leading-none shrink-0 scan-present-remove" title="Remove">×</button>';
+      var listUi = global.AttendifyStudentList;
+      var card =
+        listUi && listUi.attendanceSessionRosterCard
+          ? listUi.attendanceSessionRosterCard(row.student, "present", row.scannedAt, {
+              ring: "ring-2 ring-white",
+              removeButtonHtml: removeBtn
+            })
+          : "";
+      if (!card) {
+        card =
+          '<div class="attendance-session-card attendance-session-card--roster">' +
+          avatarHtml(row.student, "w-11 h-11", "ring-2 ring-white") +
+          '<div class="min-w-0 flex-1"><p class="font-semibold text-slate-900 text-sm truncate">' +
+          esc(row.student.name) +
+          "</p></div></div>";
+      }
+      mobileHtml +=
+        '<div class="scan-present-card" data-student-id="' +
+        esc(row.student.id) +
+        '">' +
+        card +
+        "</div>";
+      if (listUi && listUi.attendanceSessionTableRow) {
+        tableRows += listUi.attendanceSessionTableRow(row.student, "present", row.scannedAt, { removeButtonHtml: removeBtn }, index + 1);
+      }
+    });
+    list.innerHTML =
+      '<div class="scan-present-cards md:hidden">' +
+      '<div class="scan-present-list space-y-2">' +
+      mobileHtml +
+      "</div></div>" +
+      '<div class="scan-present-table-wrap hidden md:block min-h-0 overflow-y-auto rounded-xl border border-slate-100">' +
+      '<table class="scan-present-table w-full text-left border-collapse">' +
+      '<thead class="scan-present-table-head text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50/95 border-b border-slate-200 sticky top-0 z-[1]">' +
+      "<tr>" +
+      '<th class="py-2.5 px-3 text-center w-12">#</th>' +
+      '<th class="py-2.5 px-3">Student</th>' +
+      '<th class="py-2.5 px-3">Index</th>' +
+      '<th class="py-2.5 px-3">Time</th>' +
+      '<th class="py-2.5 px-3">Status</th>' +
+      '<th class="py-2.5 px-3 w-12"><span class="sr-only">Remove</span></th>' +
+      "</tr></thead><tbody>" +
+      tableRows +
+      "</tbody></table></div>";
 
     list.querySelectorAll("[data-action=remove-scan]").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -279,28 +300,62 @@
 
   function cameraContextHint() {
     if (window.location.protocol === "file:") {
-      return "Open via http://localhost:3000 (not a saved file) for camera access.";
+      return "The camera cannot run from a saved file. Open Attendify in your browser.";
     }
     if (!window.isSecureContext) {
-      return "Use HTTPS (port 3443) or localhost so the browser allows the camera.";
+      return "The camera needs a secure connection. Use the HTTPS link from your lecturer.";
     }
-    return "Allow camera access, or use manual entry below.";
+    return "Allow camera access in your browser, or use manual entry below.";
   }
 
-  /** Full viewfinder decode + fast FPS for sensitivity (guide overlay is visual only). */
-  function getCameraConfig() {
+  function qrboxSizing(viewfinderWidth, viewfinderHeight, fullFrame) {
+    var w = viewfinderWidth > 0 ? viewfinderWidth : 320;
+    var h = viewfinderHeight > 0 ? viewfinderHeight : 240;
+    if (fullFrame) {
+      return {
+        width: Math.max(200, Math.floor(w * 0.98)),
+        height: Math.max(150, Math.floor(h * 0.98))
+      };
+    }
+    var edge = Math.min(w, h);
+    var size = Math.max(200, Math.floor(edge * 0.9));
+    return { width: size, height: size };
+  }
+
+  /** @param {{ fullFrame?: boolean }} options */
+  function getCameraConfig(options) {
+    options = options || {};
+    var fullFrame = options.fullFrame !== false;
     return {
-      fps: 24,
+      fps: 18,
       disableFlip: false,
       qrbox: function (viewfinderWidth, viewfinderHeight) {
-        var w = viewfinderWidth > 0 ? viewfinderWidth : 280;
-        var h = viewfinderHeight > 0 ? viewfinderHeight : 280;
-        return {
-          width: Math.max(180, Math.floor(w * 0.99)),
-          height: Math.max(180, Math.floor(h * 0.99))
-        };
+        return qrboxSizing(viewfinderWidth, viewfinderHeight, fullFrame);
       }
     };
+  }
+
+  function softVideoResolution(constraint) {
+    var base =
+      constraint && typeof constraint === "object" ? Object.assign({}, constraint) : { facingMode: constraint || "environment" };
+    base.width = { ideal: 1280 };
+    base.height = { ideal: 720 };
+    return base;
+  }
+
+  function buildCameraStartPlans(facing) {
+    var facingAttempts = getCameraConstraintAttempts(facing);
+    var plans = [];
+    facingAttempts.forEach(function (video) {
+      plans.push({ video: video, config: getCameraConfig({ fullFrame: true }), experimental: true });
+    });
+    facingAttempts.forEach(function (video) {
+      plans.push({ video: video, config: getCameraConfig({ fullFrame: false }), experimental: true });
+    });
+    facingAttempts.forEach(function (video) {
+      plans.push({ video: softVideoResolution(video), config: getCameraConfig({ fullFrame: true }), experimental: false });
+    });
+    return plans;
   }
 
   function getCameraConstraintAttempts(facing) {
@@ -326,16 +381,19 @@
     return getCameraConstraintAttempts(facing)[0];
   }
 
-  function createQrScanner(readerId) {
+  function createQrScanner(readerId, useExperimental) {
     readerId = readerId || "qr-reader";
-    try {
-      return new Html5Qrcode(readerId, {
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-        verbose: false
-      });
-    } catch (e) {
-      return new Html5Qrcode(readerId);
+    if (useExperimental !== false) {
+      try {
+        return new Html5Qrcode(readerId, {
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+          verbose: false
+        });
+      } catch (e) {
+        /* fall through */
+      }
     }
+    return new Html5Qrcode(readerId);
   }
 
   function warmCameraLayout(readerId, callback) {
@@ -366,28 +424,28 @@
     var facing = options.facing === "user" ? "user" : "environment";
     var onScan = options.onScan;
     if (typeof onScan !== "function") return Promise.reject(new Error("onScan required"));
-    var config = getCameraConfig();
-    var attempts = getCameraConstraintAttempts(facing);
+    var plans = buildCameraStartPlans(facing);
 
     function runAttempt(index) {
-      if (index >= attempts.length) {
+      if (index >= plans.length) {
         return Promise.reject(new Error("camera_start_failed"));
       }
+      var plan = plans[index];
       prepareQrReader(readerId);
       var instance;
       try {
-        instance = createQrScanner(readerId);
+        instance = createQrScanner(readerId, plan.experimental);
       } catch (e) {
         return runAttempt(index + 1);
       }
       if (options.onScanner) options.onScanner(instance);
       return instance
-        .start(attempts[index], config, onScan, function () {})
+        .start(plan.video, plan.config, onScan, function () {})
         .then(function () {
           return {
             scanner: instance,
             attempt: index,
-            facing: facingFromConstraint(attempts[index])
+            facing: facingFromConstraint(plan.video)
           };
         })
         .catch(function () {

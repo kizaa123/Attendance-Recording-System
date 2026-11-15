@@ -10,41 +10,26 @@ function syncEnrollLevel(course) {
   if (!enrollLevel && course && course.teachLevel != null && course.teachLevel !== "") {
     enrollLevel = String(course.teachLevel);
   }
-  var pill = document.getElementById("enroll-level-pill");
   var warn = document.getElementById("enroll-link-warning");
   var submit = document.getElementById("enroll-submit");
   if (enrollLevel) {
-    if (pill) {
-      pill.textContent = "Level " + enrollLevel + " — set by your lecturer";
-      pill.classList.remove("hidden");
-    }
     if (warn) warn.classList.add("hidden");
     if (submit) submit.disabled = false;
   } else {
-    if (pill) pill.classList.add("hidden");
     if (warn) warn.classList.remove("hidden");
     if (submit) submit.disabled = true;
   }
   return enrollLevel;
 }
 
-function setIntro(course, level) {
+function setIntro(course) {
   var intro = document.getElementById("enroll-intro");
   if (!intro || !course) return;
   var label = (course.code ? course.code + " — " : "") + (course.name || "this programme");
-  if (level) {
-    intro.innerHTML =
-      'Register for <strong class="text-slate-800">' +
-      label +
-      '</strong> at <strong class="text-slate-800">Level ' +
-      level +
-      "</strong>. Your lecturer already set this level — enter your index number, name, and UCC photo.";
-  } else {
-    intro.innerHTML =
-      'Register for <strong class="text-slate-800">' +
-      label +
-      "</strong>. Your details join the programme roster used for attendance in all classes.";
-  }
+  intro.innerHTML =
+    'Register for <strong class="text-slate-800">' +
+    label +
+    "</strong>. Enter your index number, name, and confirm your photo.";
 }
 
 function updatePhotoPlaceholder(show) {
@@ -66,7 +51,7 @@ Attendify.ready().then(function () {
   }
 
   level = syncEnrollLevel(course);
-  setIntro(course, level);
+  setIntro(course);
 
   var indexInput = document.getElementById("index");
   Attendify.bindUccPhotoPreview(indexInput, {
@@ -80,12 +65,12 @@ Attendify.ready().then(function () {
       updatePhotoPlaceholder(!(result.ok && result.url));
       var statusEl = document.getElementById("ucc-photo-status");
       if (statusEl && !result.ok && !String(indexInput.value || "").trim()) {
-        statusEl.textContent = "Enter your index number to load your official UCC photo.";
+        statusEl.textContent = "Enter your index number to load your profile photo.";
       }
       var existing = Attendify.findStudent(classId, indexInput.value);
       if (existing && result.ok) {
         document.getElementById("ucc-photo-status").textContent =
-          "Official UCC photo loaded. Confirm your name below.";
+          "Profile photo loaded. Confirm your name below.";
         if (!document.getElementById("name").value) {
           document.getElementById("name").value = existing.name;
         }
@@ -105,7 +90,7 @@ document.getElementById("enroll-form").addEventListener("submit", function (even
 
   if (!enrollLevel) {
     document.getElementById("enroll-error").textContent =
-      "Missing level on this link. Ask your lecturer to resend the registration link.";
+      "This registration link is not valid. Ask your lecturer to resend the link from their programme page.";
     return;
   }
 

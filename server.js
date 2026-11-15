@@ -282,6 +282,22 @@ function handleRequest(req, res) {
     });
     return;
   }
+  if (url.pathname === "/api/auth/programmes/add" && req.method === "POST") {
+    readBody(req)
+      .then(function (body) {
+        body = body || {};
+        const me = db.validateLecturerSession(readAuthToken(req));
+        if (!me.ok) {
+          sendJson(res, 401, { ok: false, error: me.error || "Not signed in.", code: "AUTH_REQUIRED" });
+          return;
+        }
+        sendJson(res, 200, db.appendLecturerTeachingAssignment(me.lecturerId, body));
+      })
+      .catch(function () {
+        sendJson(res, 400, { ok: false, error: "Could not add the programme." });
+      });
+    return;
+  }
   if (url.pathname === "/api/auth/programmes" && req.method === "GET") {
     const me = db.validateLecturerSession(readAuthToken(req));
     if (!me.ok) {

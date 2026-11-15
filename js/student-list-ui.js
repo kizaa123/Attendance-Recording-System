@@ -69,6 +69,46 @@
     return idx != null && String(idx).trim() !== "" ? String(idx).trim() : "";
   }
 
+  function attendanceSessionTableRow(student, badgeKind, scannedAt, options, rowIndex) {
+    options = options || {};
+    if (!global.Attendify || !student) return "";
+    var indexVal = studentIndexValue(student);
+    var timeStr = scannedAt ? global.Attendify.formatTime(scannedAt) : "—";
+    var ring = options.ring != null ? options.ring : "ring-2 ring-slate-100";
+    var badge = attendanceSessionBadge(badgeKind);
+    var removeBtn = options.removeButtonHtml || "";
+    var num = rowIndex != null ? String(rowIndex) : "";
+    if (num.length < 2 && num) num = "0" + num;
+    return (
+      '<tr class="scan-present-table-row border-t border-slate-100 hover:bg-slate-50/80" data-student-id="' +
+      esc(student.id) +
+      '">' +
+      (options.showNumber !== false
+        ? '<td class="scan-present-table-num py-3 px-3 text-center text-xs font-semibold text-slate-400 tabular-nums w-12">' +
+          esc(num) +
+          "</td>"
+        : "") +
+      '<td class="scan-present-table-student py-3 px-3 min-w-0">' +
+      '<div class="flex items-center gap-2.5 min-w-0">' +
+      global.Attendify.avatarMarkup(student, "w-9 h-9", ring) +
+      '<span class="font-semibold text-slate-900 text-sm truncate">' +
+      esc(student.name) +
+      "</span></div></td>" +
+      '<td class="scan-present-table-index py-3 px-3 font-mono text-xs text-slate-600 whitespace-nowrap">' +
+      esc(indexVal) +
+      "</td>" +
+      '<td class="scan-present-table-time py-3 px-3 font-mono text-xs text-slate-500 tabular-nums whitespace-nowrap">' +
+      esc(timeStr) +
+      "</td>" +
+      '<td class="scan-present-table-status py-3 px-3">' +
+      badge +
+      "</td>" +
+      '<td class="scan-present-table-actions py-3 px-2 text-right w-12">' +
+      removeBtn +
+      "</td></tr>"
+    );
+  }
+
   function attendanceSessionRosterCard(student, badgeKind, scannedAt, options) {
     options = options || {};
     if (!global.Attendify || !student) return "";
@@ -130,6 +170,7 @@
     menuDotsSvg: menuDotsSvg,
     attendanceSessionBadge: attendanceSessionBadge,
     attendanceSessionRosterCard: attendanceSessionRosterCard,
+    attendanceSessionTableRow: attendanceSessionTableRow,
     studentIndexValue: studentIndexValue
   };
 })(window);

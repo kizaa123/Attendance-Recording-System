@@ -125,7 +125,6 @@
   var submitText = document.getElementById("btn-submit-text");
   var errorBanner = document.getElementById("login-error-banner");
   var errorMsg = document.getElementById("login-error-msg");
-  var demoLecturerBtn = document.getElementById("demo-card-lecturer");
   var togglePwBtn = document.getElementById("toggle-pw-visibility");
   var pwEyeOpen = document.getElementById("pw-eye-open");
   var pwEyeClosed = document.getElementById("pw-eye-closed");
@@ -172,13 +171,6 @@
       });
   }
 
-  if (demoLecturerBtn && usernameInput && passwordInput) {
-    demoLecturerBtn.addEventListener("click", function () {
-      usernameInput.value = "lecturer@ucc.edu.gh";
-      passwordInput.value = "Demo1234";
-      hideLoginError();
-    });
-  }
   function showLoginError(msg) {
     if (!errorMsg || !errorBanner) return;
     errorMsg.textContent = msg;

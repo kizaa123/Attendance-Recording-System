@@ -28,8 +28,6 @@
       pointer-events: none;
       opacity: 0.95;
     }
-    .demo-card { transition: all 0.18s ease-in-out; }
-    .demo-card:hover { transform: translateY(-1px); }
     @keyframes spin { to { transform: rotate(360deg); } }
     .btn-spinner {
       width: 17px;
@@ -276,21 +274,6 @@
 
       </form>
 
-      <!-- TRY THE DEMO Section (Exact from reference image) -->
-      <div class="mt-7 pt-5 border-t border-slate-100">
-        <p class="text-[10px] font-extrabold tracking-widest text-slate-400 text-center uppercase mb-3">
-          TRY THE DEMO
-        </p>
-
-        <button type="button" id="demo-card-lecturer" class="demo-card w-full text-left bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col cursor-pointer">
-          <span class="text-xs font-bold text-slate-800">Course Lecturer</span>
-          <span class="text-[11px] text-slate-500 font-mono mt-0.5">lecturer@ucc.edu.gh</span>
-        </button>
-
-        <p class="text-[11px] text-slate-400 text-center mt-3 font-medium">
-          Demo password: <span class="text-slate-600 font-mono font-semibold">Demo1234</span>
-        </p>
-      </div>
           </div>
 
           <div class="auth-panel">
@@ -301,7 +284,7 @@
             <form id="signup-form" class="auth-form-stack" autocomplete="on">
               <label class="auth-form-field-label">Full name
                 <div class="form-input-focus flex items-center bg-slate-50 border border-slate-200 rounded-xl">
-                  <input id="signup-name" name="fullName" type="text" placeholder="e.g. Dr. Ama Mensah"
+                  <input id="signup-name" name="fullName" type="text" placeholder="e.g. Prof. Ama Mensah"
                     class="w-full bg-transparent text-sm focus:outline-none" autocomplete="name">
                 </div>
               </label>
@@ -364,7 +347,7 @@
 
   </main>
 
-  <script src="js/store.js?v=29"></script>
-  <script src="js/auth-page.js?v=14"></script>
+  <script src="js/store.js?v=32"></script>
+  <script src="js/auth-page.js?v=15"></script>
 </body>
 </html>

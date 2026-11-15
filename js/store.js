@@ -34,12 +34,12 @@
 
   function connectionHint() {
     if (window.location.protocol === "file:") {
-      return "Start the server (npm start), then open " + API_BASE + "/ — do not open HTML files directly.";
+      return "Unable to connect. Open Attendify using the link from your institution.";
     }
     if (window.location.port && window.location.port !== DEFAULT_PORT) {
-      return "Use " + API_BASE + "/ with the server running (not Live Server on another port).";
+      return "Unable to connect. Use the official Attendify address you were given.";
     }
-    return "Start the server: npm start or npm run serve:bg";
+    return "Unable to connect right now. Check your network and try again.";
   }
 
   function seedStudents() {
@@ -1023,7 +1023,7 @@
       timer = setTimeout(function () {
         var run = ++token;
         if (previewEl && !options.keepPreviewVisible) previewEl.classList.remove("hidden");
-        if (statusEl) statusEl.textContent = "Looking up UCC photo…";
+        if (statusEl) statusEl.textContent = "Looking up profile photo…";
         if (spinnerEl) spinnerEl.classList.remove("hidden");
         if (imgEl) imgEl.classList.add("hidden");
         resolveUccPhoto(index).then(function (result) {
@@ -1033,12 +1033,12 @@
           if (result.ok && imgEl) {
             imgEl.src = result.url;
             imgEl.classList.remove("hidden");
-            if (statusEl) statusEl.textContent = "Official profile photo ready.";
+            if (statusEl) statusEl.textContent = "Profile photo ready.";
           } else if (imgEl) {
             imgEl.removeAttribute("src");
             imgEl.classList.add("hidden");
             if (statusEl) {
-              statusEl.textContent = "No UCC photo for this index — you can still register.";
+              statusEl.textContent = "No photo found for this index — you can still register.";
             }
           }
         });
@@ -1723,6 +1723,28 @@
       });
   }
 
+  function addLecturerProgramme(assignment) {
+    return apiFetch("/api/auth/programmes/add", {
+      method: "POST",
+      body: assignment || {}
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result.ok && result.state) {
+          applyState(result.state);
+          var session = getSession() || {};
+          if (result.programmeIds) session.programmeIds = result.programmeIds;
+          saveSession(session);
+        }
+        return result;
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
   function updateLecturerProfile(payload) {
     return apiFetch("/api/auth/profile", {
       method: "PATCH",
@@ -1789,6 +1811,7 @@
     createTaShareLink: createTaShareLink,
     updateLecturerProfile: updateLecturerProfile,
     fetchLecturerProgrammeCatalogue: fetchLecturerProgrammeCatalogue,
+    addLecturerProgramme: addLecturerProgramme,
     activeSessionFor: activeSessionFor,
     photoFromFile: photoFromFile,
     uccPhotoUrl: uccPhotoUrl,
