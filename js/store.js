@@ -1164,6 +1164,21 @@
     return uccPhotoUrl(student.index);
   }
 
+  /** Same-origin photo URL safe for QR canvas + mobile (avoids UCC CDN CORS). */
+  function qrCompositePhotoUrl(student) {
+    if (!student) return "";
+    var photo = String(student.photo || "").trim();
+    var index = String(student.index || student.studentIndex || "").trim();
+    if (photo.indexOf("data:") === 0) return photo;
+    if (photo.indexOf("cdn.ucc.edu.gh") !== -1) return index ? uccPhotoPageUrl(index) : "";
+    if (photo.indexOf("/api/ucc/photo") !== -1) {
+      return /^https?:\/\//i.test(photo) ? photo : enrollApiUrl(photo);
+    }
+    if (photo && /^https?:\/\//i.test(photo)) return photo;
+    if (index) return uccPhotoPageUrl(index);
+    return "";
+  }
+
   function resolveUccPhoto(indexNumber) {
     var url = uccPhotoUrl(indexNumber);
     if (!url) return Promise.resolve({ url: "", ok: false });
@@ -1308,9 +1323,18 @@
   function drawQr(element, text, downloadLink, filename, photoUrl) {
     if (!element) return;
     var size = 224;
-    var avatar = 46;
+    var avatar = 50;
+    var rawPhoto = String(photoUrl || "").trim();
+    if (rawPhoto.indexOf("cdn.ucc.edu.gh") !== -1) {
+      var tagMatch = rawPhoto.match(/[?&]tag=([^&]+)/i);
+      var tag = tagMatch ? decodeURIComponent(tagMatch[1]) : "";
+      if (tag) rawPhoto = uccPhotoPageUrl(tag);
+    }
+    photoUrl = rawPhoto;
+
     element.innerHTML = "";
-    element.classList.add("relative", "inline-flex", "items-center", "justify-center");
+    element.classList.add("attendify-qr-host");
+
     new QRCode(element, {
       text: text,
       width: size,
@@ -1332,9 +1356,9 @@
       if (!photoUrl) return Promise.resolve(false);
       return new Promise(function (resolve) {
         var face = new Image();
-        face.crossOrigin = "anonymous";
+        if (photoUrl.indexOf("data:") !== 0) face.crossOrigin = "anonymous";
         face.onload = function () {
-          var pad = 4;
+          var pad = 5;
           var r = avatar / 2;
           ctx.fillStyle = "#ffffff";
           ctx.beginPath();
@@ -1355,34 +1379,37 @@
       });
     }
 
+    function addCenterOverlay(holder) {
+      if (!photoUrl || !holder) return;
+      var overlay = document.createElement("img");
+      overlay.src = photoUrl;
+      overlay.alt = "";
+      overlay.className = "attendify-qr-avatar";
+      overlay.referrerPolicy = "no-referrer";
+      holder.appendChild(overlay);
+    }
+
     function renderComposite(sourceCanvas) {
       var composite = document.createElement("canvas");
       composite.width = size;
       composite.height = size;
+      composite.className = "attendify-qr-canvas";
       var ctx = composite.getContext("2d");
       ctx.drawImage(sourceCanvas, 0, 0, size, size);
       paintAvatarOn(ctx, size / 2, size / 2).then(function (painted) {
         var holder = document.createElement("div");
-        holder.className = "relative inline-block";
+        holder.className = "attendify-qr-wrap";
+        holder.style.width = size + "px";
+        holder.style.height = size + "px";
         holder.appendChild(composite);
-        if (!painted && photoUrl) {
-          var overlay = document.createElement("img");
-          overlay.src = photoUrl;
-          overlay.alt = "";
-          overlay.className =
-            "absolute left-1/2 top-1/2 w-11 h-11 -translate-x-1/2 -translate-y-1/2 rounded-full object-cover ring-2 ring-white shadow-sm pointer-events-none";
-          overlay.referrerPolicy = "no-referrer";
-          holder.appendChild(overlay);
-        }
+        if (!painted) addCenterOverlay(holder);
         element.innerHTML = "";
         element.appendChild(holder);
         setDownloadFromCanvas(painted ? composite : sourceCanvas);
       });
     }
 
-    setTimeout(function () {
-      var canvas = element.querySelector("canvas");
-      var img = element.querySelector("img");
+    function finishQrRender(canvas, img) {
       if (canvas) {
         if (photoUrl) renderComposite(canvas);
         else setDownloadFromCanvas(canvas);
@@ -1401,7 +1428,21 @@
         downloadLink.href = img.src;
         downloadLink.download = filename;
       }
-    }, 90);
+    }
+
+    function waitForQrNode(tries) {
+      var canvas = element.querySelector("canvas");
+      var img = element.querySelector("img");
+      if (canvas || img || tries >= 30) {
+        finishQrRender(canvas, img);
+        return;
+      }
+      setTimeout(function () {
+        waitForQrNode(tries + 1);
+      }, tries < 5 ? 40 : 100);
+    }
+
+    waitForQrNode(0);
   }
 
   function formatTime(iso) {
@@ -2043,6 +2084,7 @@
     uccPhotoUrl: uccPhotoUrl,
     uccPhotoPageUrl: uccPhotoPageUrl,
     studentPhotoUrl: studentPhotoUrl,
+    qrCompositePhotoUrl: qrCompositePhotoUrl,
     resolveUccPhoto: resolveUccPhoto,
     bindUccPhotoPreview: bindUccPhotoPreview,
     avatarMarkup: avatarMarkup,

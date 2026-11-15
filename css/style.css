@@ -1467,3 +1467,59 @@ body.faculty-content-ready main .flex-1 {
     font-size: 0.875rem;
   }
 }
+
+.attendify-qr-host {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.attendify-qr-wrap {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  vertical-align: middle;
+}
+
+.attendify-qr-canvas,
+.attendify-qr-wrap canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+
+.attendify-qr-avatar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50px;
+  height: 50px;
+  margin-left: -25px;
+  margin-top: -25px;
+  border-radius: 9999px;
+  object-fit: cover;
+  object-position: center center;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+  z-index: 2;
+  background: #f1f5f9;
+}
+
+.ta-scanner-dialog {
+  min-height: 100dvh;
+}
+
+.ta-scanner-dialog .scan-camera-shell {
+  max-width: none;
+}
+
+@media (min-width: 768px) {
+  .ta-scanner-dialog .scanner-layout-present > div {
+    min-height: 0;
+    height: 100%;
+  }
+}

@@ -669,7 +669,14 @@ function handleRequest(req, res) {
         return;
       }
     }
-    rel = "/ta-scanner.html";
+    const taParams = new URLSearchParams(url.search || "");
+    taParams.set("token", scanToken);
+    res.writeHead(302, {
+      Location: "/ta-scanner.html?" + taParams.toString(),
+      "Cache-Control": "no-store"
+    });
+    res.end();
+    return;
   }
 
   if (isFacultyHtmlPage(rel)) {

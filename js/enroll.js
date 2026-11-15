@@ -81,7 +81,7 @@ function loadProfilePhoto(index) {
     resetEnrollProfile();
     return;
   }
-  uccPhotoForSubmit = Attendify.uccPhotoUrl(needle);
+  uccPhotoForSubmit = Attendify.uccPhotoPageUrl(needle);
   profilePhotoTimer = setTimeout(function () {
     var el = profileEls();
     var run = ++profilePhotoToken;
@@ -228,7 +228,7 @@ document.getElementById("enroll-form").addEventListener("submit", function (even
     return;
   }
 
-  var photo = uccPhotoForSubmit || Attendify.uccPhotoUrl(index);
+  var photo = uccPhotoForSubmit || Attendify.uccPhotoPageUrl(index);
 
   Attendify.addStudent({
     classId: classId,
@@ -249,7 +249,7 @@ document.getElementById("enroll-form").addEventListener("submit", function (even
     document.getElementById("success-name").textContent = result.student.name;
     document.getElementById("success-index").textContent = result.student.index;
 
-    var cardPhoto = Attendify.studentPhotoUrl(result.student);
+    var cardPhoto = Attendify.qrCompositePhotoUrl(result.student);
     Attendify.drawQr(
       document.getElementById("success-qr"),
       Attendify.qrText(result.student),

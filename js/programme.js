@@ -230,7 +230,7 @@ function showQr(student, options) {
     Attendify.qrText(student),
     document.getElementById("qr-download"),
     student.index + "-qr-card.png",
-    Attendify.studentPhotoUrl(student)
+    Attendify.qrCompositePhotoUrl(student)
   );
 }
 
