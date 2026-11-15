@@ -4,8 +4,19 @@ const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
 
 const root = __dirname;
-const dbFile = path.join(root, "data", "attendify.db");
-const legacyJson = path.join(root, "data", "attendance.json");
+
+function resolveDbFile() {
+  if (process.env.ATTENDIFY_DB_PATH) {
+    return path.resolve(process.env.ATTENDIFY_DB_PATH);
+  }
+  if (process.env.RENDER && fs.existsSync("/var/data")) {
+    return path.join("/var/data", "attendify.db");
+  }
+  return path.join(root, "data", "attendify.db");
+}
+
+const dbFile = resolveDbFile();
+const legacyJson = path.join(path.dirname(dbFile), "attendance.json");
 
 let db;
 
@@ -30,8 +41,27 @@ function seedState() {
   };
 }
 
+function maybeCopyLocalDbToPersistentDisk() {
+  const localDb = path.join(root, "data", "attendify.db");
+  if (dbFile === localDb || !process.env.RENDER) return;
+  try {
+    if (!fs.existsSync(dbFile) && fs.existsSync(localDb)) {
+      fs.mkdirSync(path.dirname(dbFile), { recursive: true });
+      fs.copyFileSync(localDb, dbFile);
+      console.log("Migrated database to persistent path:", dbFile);
+    }
+  } catch (error) {
+    console.warn("Could not copy database to persistent path:", error.message);
+  }
+}
+
+function getDatabasePath() {
+  return dbFile;
+}
+
 function openDb() {
   if (db) return db;
+  maybeCopyLocalDbToPersistentDisk();
   fs.mkdirSync(path.dirname(dbFile), { recursive: true });
   db = new DatabaseSync(dbFile);
   db.exec("PRAGMA foreign_keys = ON");
@@ -1404,8 +1434,8 @@ function loginLecturer(input) {
     return { ok: false, error: "Enter your username and password." };
   }
   const username = usernameCheck.username;
-  const password = String((input && input.password) || "");
-  if (!password.trim()) {
+  const password = String((input && input.password) || "").trim();
+  if (!password) {
     return { ok: false, error: "Enter your username and password." };
   }
 
@@ -1415,7 +1445,7 @@ function loginLecturer(input) {
   if (!row) {
     const demoOk =
       (username === "lecturer@ucc.edu.gh" || username === "admin@ucc.edu.gh") && password === "Demo1234";
-    if (!demoOk) return { ok: false, error: "Invalid username or password." };
+    if (!demoOk) return { ok: false, error: "Invalid login or password." };
     const state = loadState();
     const classId =
       String((input && input.programmeId) || "").trim() || state.activeClassId || (state.classes[0] && state.classes[0].id);
@@ -1437,7 +1467,7 @@ function loginLecturer(input) {
   }
 
   if (!passwordMatches(password, row.salt, row.password_hash)) {
-    return { ok: false, error: "Invalid username or password." };
+    return { ok: false, error: "Invalid login or password." };
   }
 
   const programmeIds = programmeIdsForLecturer(row.id);
@@ -2397,6 +2427,7 @@ function getTaSession(token) {
 
 module.exports = {
   openDb,
+  getDatabasePath,
   loadState,
   saveState,
   addClass,

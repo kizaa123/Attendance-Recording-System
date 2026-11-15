@@ -1863,7 +1863,12 @@
   function signupLecturer(payload) {
     payload = payload || {};
     var body = Object.assign({}, payload);
-    if (body.username != null) body.username = String(body.username).trim().toLowerCase();
+    if (body.username != null) {
+      body.username = String(body.username)
+        .normalize("NFKC")
+        .trim()
+        .toLowerCase();
+    }
     if (body.password != null) body.password = String(body.password).trim();
     return fetch(authApiUrl("/api/auth/signup"), {
       method: "POST",
@@ -1891,7 +1896,7 @@
         .normalize("NFKC")
         .trim()
         .toLowerCase(),
-      password: String(payload.password || "")
+      password: String(payload.password || "").trim()
     };
     if (payload.programmeId) body.programmeId = payload.programmeId;
     return fetch(authApiUrl("/api/auth/login"), {

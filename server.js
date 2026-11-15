@@ -165,16 +165,29 @@ function readAuthToken(req) {
   return readCookieToken(req);
 }
 
-function sessionCookieHeader(token, maxAgeSec) {
+function requestIsHttps(req) {
+  if (!req) return false;
+  const forwarded = String(req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  if (forwarded === "https") return true;
+  if (forwarded === "http") return false;
+  return !!(req.socket && req.socket.encrypted);
+}
+
+function sessionCookieHeader(token, maxAgeSec, req) {
   const age = maxAgeSec != null ? maxAgeSec : 12 * 60 * 60;
+  const secure = requestIsHttps(req) ? "; Secure" : "";
   if (!token) {
-    return "attendify_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+    return "attendify_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" + secure;
   }
   return (
     "attendify_token=" +
     encodeURIComponent(token) +
     "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" +
-    age
+    age +
+    secure
   );
 }
 
@@ -360,7 +373,7 @@ function handleRequest(req, res) {
     readBody(req)
       .then(function (body) {
         const result = runApi(db.signupLecturer)(body || {});
-        const headers = result && result.ok && result.token ? { "Set-Cookie": sessionCookieHeader(result.token) } : {};
+        const headers = result && result.ok && result.token ? { "Set-Cookie": sessionCookieHeader(result.token, null, req) } : {};
         sendJson(res, 200, result, headers);
       })
       .catch(function () {
@@ -372,7 +385,7 @@ function handleRequest(req, res) {
     readBody(req)
       .then(function (body) {
         const result = runApi(db.loginLecturer)(body || {});
-        const headers = result && result.ok && result.token ? { "Set-Cookie": sessionCookieHeader(result.token) } : {};
+        const headers = result && result.ok && result.token ? { "Set-Cookie": sessionCookieHeader(result.token, null, req) } : {};
         sendJson(res, 200, result, headers);
       })
       .catch(function () {
@@ -382,7 +395,7 @@ function handleRequest(req, res) {
   }
   if (url.pathname === "/api/auth/logout" && req.method === "POST") {
     db.destroyLecturerSession(readAuthToken(req));
-    sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookieHeader("") });
+    sendJson(res, 200, { ok: true }, { "Set-Cookie": sessionCookieHeader("", null, req) });
     return;
   }
   if (url.pathname === "/api/auth/me" && req.method === "GET") {
@@ -722,7 +735,7 @@ function handleRequest(req, res) {
 const httpServer = http.createServer(handleRequest);
 httpServer.listen({ port: PORT, host: HOST, ipv6Only: LISTEN_IPV6_ONLY }, function () {
   const lanIp = getNetworkIp();
-  console.log("Database: data/attendify.db");
+  console.log("Database:", db.getDatabasePath());
   console.log("Local:    http://localhost:" + PORT + "/");
   console.log("          http://127.0.0.1:" + PORT + "/");
   console.log("Network:  http://" + lanIp + ":" + PORT + "/");

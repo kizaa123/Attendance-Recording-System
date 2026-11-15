@@ -213,9 +213,11 @@
         if (submitText) submitText.textContent = "Sign In";
         if (!result.ok) {
           var msg = result.error || "Could not sign in.";
-          if (msg.indexOf("Invalid username or password") !== -1) {
-            msg =
-              "Invalid username or password. Use the same username you chose at signup (not your full name), and check caps lock.";
+          if (
+            msg.indexOf("Invalid login or password") !== -1 ||
+            msg.indexOf("Invalid username or password") !== -1
+          ) {
+            msg = "Invalid login or password.";
           }
           showLoginError(msg);
           return;
@@ -644,7 +646,10 @@
     signupForm.addEventListener("submit", function (event) {
       event.preventDefault();
       hideSignupError();
-      var username = String(document.getElementById("signup-username").value || "").trim().toLowerCase();
+      var username = String(document.getElementById("signup-username").value || "")
+        .normalize("NFKC")
+        .trim()
+        .toLowerCase();
       var password = document.getElementById("signup-password").value;
       var fullName = document.getElementById("signup-name").value.trim();
 
