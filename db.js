@@ -1088,6 +1088,55 @@ function validateLecturerSession(token) {
   };
 }
 
+function enrollPageContext(classId, level) {
+  openDb();
+  const id = String(classId || "").trim();
+  if (!id) return { ok: false, error: "This registration link is not valid." };
+  const cls = db.prepare("SELECT id, code, name, department FROM classes WHERE id = ?").get(id);
+  if (!cls) return { ok: false, error: "This registration link is not valid. Ask your lecturer to send the link again." };
+  const lvl = normalizeStudentLevel(level);
+  let teachLevel = lvl;
+  if (teachLevel == null) {
+    const row = db
+      .prepare("SELECT level FROM lecturer_programmes WHERE class_id = ? ORDER BY level LIMIT 1")
+      .get(id);
+    teachLevel = row ? Number(row.level) : null;
+  }
+  return {
+    ok: true,
+    course: {
+      id: cls.id,
+      code: cls.code,
+      name: cls.name,
+      department: cls.department,
+      teachLevel: teachLevel
+    },
+    level: teachLevel
+  };
+}
+
+function enrollStudentLookup(classId, index) {
+  openDb();
+  const cid = String(classId || "").trim();
+  const idx = String(index || "").trim();
+  if (!cid || idx.length < 4) return { ok: false };
+  const row = db
+    .prepare(
+      "SELECT name, index_number AS studentIndex, email, photo FROM students WHERE class_id = ? AND index_number = ? COLLATE NOCASE LIMIT 1"
+    )
+    .get(cid, idx);
+  if (!row) return { ok: false };
+  return {
+    ok: true,
+    student: {
+      name: row.name,
+      index: row.studentIndex,
+      email: row.email || "",
+      photo: row.photo || ""
+    }
+  };
+}
+
 function publicState() {
   openDb();
   const classes = db.prepare("SELECT id, code, name, department FROM classes ORDER BY code").all();
@@ -2295,6 +2344,8 @@ module.exports = {
   destroyLecturerSession,
   validateLecturerSession,
   publicState,
+  enrollPageContext,
+  enrollStudentLookup,
   addStudent,
   deleteStudent,
   markPresent,

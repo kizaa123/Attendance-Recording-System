@@ -1,15 +1,14 @@
 var uccPhotoForSubmit = "";
 var enrollLevel = "";
+var enrollClassId = "";
+var profileLookupTimer = null;
 
 function levelFromQuery() {
   return new URLSearchParams(window.location.search).get("level") || "";
 }
 
-function syncEnrollLevel(course) {
-  enrollLevel = levelFromQuery();
-  if (!enrollLevel && course && course.teachLevel != null && course.teachLevel !== "") {
-    enrollLevel = String(course.teachLevel);
-  }
+function applyEnrollLevel(level) {
+  enrollLevel = level != null && level !== "" ? String(level) : "";
   var warn = document.getElementById("enroll-link-warning");
   var submit = document.getElementById("enroll-submit");
   if (enrollLevel) {
@@ -29,7 +28,7 @@ function setIntro(course) {
   intro.innerHTML =
     'Register for <strong class="text-slate-800">' +
     label +
-    "</strong>. Enter your index number, name, and confirm your photo.";
+    "</strong>. Enter your index number, confirm your name, and check your profile photo.";
 }
 
 function updatePhotoPlaceholder(show) {
@@ -38,53 +37,108 @@ function updatePhotoPlaceholder(show) {
   placeholder.classList.toggle("hidden", !show);
 }
 
-Attendify.ready().then(function () {
-  var classId = Attendify.requestedClassId();
-  var level = levelFromQuery();
-  var course = Attendify.classById(classId, level);
-  if (!course) {
-    var intro = document.getElementById("enroll-intro");
-    if (intro) intro.textContent = "This registration link is not valid. Ask your lecturer to send the link again.";
-    var form = document.getElementById("enroll-form");
-    if (form) form.classList.add("hidden");
-    return;
+function showProfilePhoto(url) {
+  var img = document.getElementById("ucc-photo-img");
+  if (!img || !url) return;
+  img.src = url;
+  img.classList.remove("hidden");
+  updatePhotoPlaceholder(false);
+}
+
+function applyStudentProfile(student) {
+  if (!student) return;
+  var nameInput = document.getElementById("name");
+  var emailInput = document.getElementById("email");
+  if (nameInput && !nameInput.value.trim() && student.name) {
+    nameInput.value = student.name;
   }
+  if (emailInput && !emailInput.value.trim() && student.email) {
+    emailInput.value = student.email;
+  }
+  var photo = student.photo && String(student.photo).trim() ? student.photo : Attendify.uccPhotoUrl(student.index);
+  if (photo) {
+    uccPhotoForSubmit = photo;
+    showProfilePhoto(photo);
+  }
+  var statusEl = document.getElementById("ucc-photo-status");
+  if (statusEl && student.name) {
+    statusEl.textContent = "Profile loaded. Confirm your name below.";
+  }
+}
 
-  level = syncEnrollLevel(course);
-  setIntro(course);
+function lookupProfileForIndex(index) {
+  clearTimeout(profileLookupTimer);
+  var needle = String(index || "").trim();
+  if (!enrollClassId || needle.length < 4) return;
+  profileLookupTimer = setTimeout(function () {
+    Attendify.fetchEnrollStudent(enrollClassId, needle).then(function (result) {
+      if (result && result.ok && result.student) {
+        applyStudentProfile(result.student);
+      }
+    });
+  }, 500);
+}
 
-  var indexInput = document.getElementById("index");
+function bindProfilePreview(indexInput) {
+  if (!indexInput) return;
   Attendify.bindUccPhotoPreview(indexInput, {
     keepPreviewVisible: true,
     previewEl: document.getElementById("ucc-photo-preview"),
     imgEl: document.getElementById("ucc-photo-img"),
     spinnerEl: document.getElementById("ucc-photo-spinner"),
     statusEl: document.getElementById("ucc-photo-status"),
+    hidePlaceholder: updatePhotoPlaceholder,
     onChange: function (result) {
-      uccPhotoForSubmit = result.url || Attendify.uccPhotoUrl(indexInput.value);
+      var index = String(indexInput.value || "").trim();
+      uccPhotoForSubmit = result.url || Attendify.uccPhotoUrl(index);
       updatePhotoPlaceholder(!(result.ok && result.url));
       var statusEl = document.getElementById("ucc-photo-status");
-      if (statusEl && !result.ok && !String(indexInput.value || "").trim()) {
+      if (statusEl && !result.ok && !index) {
         statusEl.textContent = "Enter your index number to load your profile photo.";
       }
-      var existing = Attendify.findStudent(classId, indexInput.value);
-      if (existing && result.ok) {
-        document.getElementById("ucc-photo-status").textContent =
-          "Profile photo loaded. Confirm your name below.";
-        if (!document.getElementById("name").value) {
-          document.getElementById("name").value = existing.name;
-        }
-        if (!document.getElementById("email").value && existing.email) {
-          document.getElementById("email").value = existing.email;
-        }
+      if (result.ok) {
+        lookupProfileForIndex(index);
       }
     }
   });
-});
+  indexInput.addEventListener("input", function () {
+    lookupProfileForIndex(indexInput.value);
+  });
+}
+
+function initEnrollPage() {
+  enrollClassId = Attendify.requestedClassId();
+  var indexInput = document.getElementById("index");
+  bindProfilePreview(indexInput);
+
+  var levelQ = levelFromQuery();
+  Attendify.fetchEnrollContext(enrollClassId, levelQ).then(function (ctx) {
+    if (!ctx || !ctx.ok || !ctx.course) {
+      var intro = document.getElementById("enroll-intro");
+      if (intro) {
+        intro.textContent =
+          (ctx && ctx.error) || "This registration link is not valid. Ask your lecturer to send the link again.";
+      }
+      var form = document.getElementById("enroll-form");
+      if (form) form.classList.add("hidden");
+      return;
+    }
+    enrollClassId = ctx.course.id;
+    var level = ctx.level != null && ctx.level !== "" ? ctx.level : levelQ;
+    applyEnrollLevel(level);
+    setIntro(ctx.course);
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initEnrollPage);
+} else {
+  initEnrollPage();
+}
 
 document.getElementById("enroll-form").addEventListener("submit", function (event) {
   event.preventDefault();
-  var classId = Attendify.requestedClassId();
+  var classId = enrollClassId || Attendify.requestedClassId();
   var index = document.getElementById("index").value;
   document.getElementById("enroll-error").textContent = "";
 

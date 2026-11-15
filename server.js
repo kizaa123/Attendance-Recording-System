@@ -141,6 +141,8 @@ function isPublicApi(pathname, method) {
   if (pathname === "/api/auth/logout" && method === "POST") return true;
   if (pathname === "/api/auth/me" && method === "GET") return true;
   if (pathname === "/api/state" && method === "GET") return true;
+  if (pathname === "/api/enroll/context" && method === "GET") return true;
+  if (pathname === "/api/enroll/student" && method === "GET") return true;
   if (pathname === "/api/students" && method === "POST") return true;
   if (pathname === "/api/attendance" && method === "POST") return true;
   if (pathname.indexOf("/api/ta/") === 0 && method === "GET") return true;
@@ -194,6 +196,22 @@ function handleRequest(req, res) {
       port: PORT,
       httpsPort: hasHttps ? HTTPS_PORT : null
     });
+    return;
+  }
+  if (url.pathname === "/api/enroll/context" && req.method === "GET") {
+    sendJson(
+      res,
+      200,
+      db.enrollPageContext(url.searchParams.get("class"), url.searchParams.get("level"))
+    );
+    return;
+  }
+  if (url.pathname === "/api/enroll/student" && req.method === "GET") {
+    sendJson(
+      res,
+      200,
+      db.enrollStudentLookup(url.searchParams.get("class"), url.searchParams.get("index"))
+    );
     return;
   }
   if (url.pathname === "/api/state" && req.method === "GET") {

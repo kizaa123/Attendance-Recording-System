@@ -327,7 +327,7 @@
         });
       }
       probe.onload = function () {
-        settle(probe.naturalWidth > 8 && probe.naturalHeight > 8 ? "loaded" : "error");
+        settle(probe.naturalWidth > 0 && probe.naturalHeight > 0 ? "loaded" : "error");
       };
       probe.onerror = function () {
         settle("error");
@@ -622,6 +622,36 @@
     if (printFromBlobUrl()) return;
 
     window.alert("Could not open the print view. Allow pop-ups, or use Export CSV.");
+  }
+
+  function fetchEnrollContext(classId, level) {
+    var qs =
+      "?class=" +
+      encodeURIComponent(String(classId || "")) +
+      "&level=" +
+      encodeURIComponent(String(level || ""));
+    return apiFetch("/api/enroll/context" + qs)
+      .then(function (response) {
+        return response.json();
+      })
+      .catch(function () {
+        return { ok: false, error: connectionHint() };
+      });
+  }
+
+  function fetchEnrollStudent(classId, index) {
+    var qs =
+      "?class=" +
+      encodeURIComponent(String(classId || "")) +
+      "&index=" +
+      encodeURIComponent(String(index || ""));
+    return apiFetch("/api/enroll/student" + qs)
+      .then(function (response) {
+        return response.json();
+      })
+      .catch(function () {
+        return { ok: false };
+      });
   }
 
   function addStudent(input) {
@@ -1023,17 +1053,45 @@
         resolveUccPhoto(index).then(function (result) {
           if (run !== token) return;
           if (spinnerEl) spinnerEl.classList.add("hidden");
-          if (options.onChange) options.onChange(result);
-          if (result.ok && imgEl) {
-            imgEl.src = result.url;
-            imgEl.classList.remove("hidden");
+          var url = result.url || uccPhotoUrl(index);
+          function showLoaded() {
+            if (options.onChange) options.onChange({ url: url, ok: true });
             if (statusEl) statusEl.textContent = "Profile photo ready.";
-          } else if (imgEl) {
-            imgEl.removeAttribute("src");
-            imgEl.classList.add("hidden");
+            if (options.hidePlaceholder && imgEl) options.hidePlaceholder(false);
+          }
+          function showMissing() {
+            if (options.onChange) options.onChange({ url: url, ok: false });
+            if (imgEl) {
+              imgEl.removeAttribute("src");
+              imgEl.classList.add("hidden");
+            }
             if (statusEl) {
               statusEl.textContent = "No photo found for this index — you can still register.";
             }
+            if (options.hidePlaceholder && imgEl) options.hidePlaceholder(true);
+          }
+          if (!url || !imgEl) {
+            if (!result.ok) showMissing();
+            else showLoaded();
+            return;
+          }
+          imgEl.onload = function () {
+            if (run !== token) return;
+            imgEl.classList.remove("hidden");
+            showLoaded();
+          };
+          imgEl.onerror = function () {
+            if (run !== token) return;
+            if (result.ok) {
+              imgEl.classList.remove("hidden");
+              showLoaded();
+              return;
+            }
+            showMissing();
+          };
+          imgEl.src = url;
+          if (result.ok) {
+            imgEl.classList.remove("hidden");
           }
         });
       }, 450);
@@ -1807,6 +1865,8 @@
     attendanceRows: attendanceRows,
     enrollUrl: enrollUrl,
     enrollShareSummary: enrollShareSummary,
+    fetchEnrollContext: fetchEnrollContext,
+    fetchEnrollStudent: fetchEnrollStudent,
     refreshShareOrigin: refreshShareOrigin,
     publicShareOrigin: publicShareOrigin,
     scanShareUrl: scanShareUrl,

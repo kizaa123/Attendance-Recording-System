@@ -30,6 +30,9 @@
 }
 
 .enroll-photo-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -37,6 +40,10 @@
   height: 100%;
   color: #94a3b8;
   background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.enroll-photo-placeholder.hidden {
+  display: none;
 }
 
 .enroll-photo-placeholder svg {

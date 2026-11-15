@@ -31,6 +31,7 @@ function closeAllStudentMenus() {
 
 var uccPhotoForSubmit = "";
 var lastRosterSignature = "";
+var addSavePending = false;
 
 function avatar(student) {
   return Attendify.avatarMarkup(student, "w-14 h-14", "ring-2 ring-slate-100");
@@ -196,9 +197,30 @@ function openAddModal(student) {
 
 function closeAddModal() {
   addModal.classList.add("hidden");
+  addSavePending = false;
+  var submitBtn = document.querySelector("#add-form button[type=submit]");
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Save";
+  }
 }
 
-function showQr(student) {
+function showQr(student, options) {
+  options = options || {};
+  var msgEl = document.getElementById("qr-success-msg");
+  if (msgEl) {
+    if (options.fromSave) {
+      if (options.message) {
+        msgEl.textContent = options.message;
+      } else {
+        msgEl.textContent = "Student saved successfully. Download the QR card below.";
+      }
+      msgEl.classList.remove("hidden");
+    } else {
+      msgEl.textContent = "";
+      msgEl.classList.add("hidden");
+    }
+  }
   document.getElementById("qr-name").textContent = student.name;
   document.getElementById("qr-index").textContent = student.index;
   document.getElementById("qr-course").textContent = course.code + " — " + course.name;
@@ -231,15 +253,37 @@ document.getElementById("qr-close").addEventListener("click", function () {
 });
 document.getElementById("add-form").addEventListener("submit", function (event) {
   event.preventDefault();
+  if (addSavePending) return;
+  addSavePending = true;
   syncCourse();
   var teachLevel = programmeTeachLevel();
   if (!teachLevel) {
+    addSavePending = false;
     document.getElementById("add-error").textContent =
       "This programme has no teaching level set. Add or fix the programme under Settings first.";
     return;
   }
+  document.getElementById("add-error").textContent = "";
   var index = document.getElementById("student-index").value;
   var photo = uccPhotoForSubmit || Attendify.uccPhotoUrl(index);
+  var submitBtn = event.submitter || document.querySelector("#add-form button[type=submit]");
+  if (!editingId) {
+    var onRoster = Attendify.findStudent(classId, index);
+    if (onRoster) {
+      addSavePending = false;
+      var levelNote =
+        levelFilter && onRoster.level != null && Number(onRoster.level) !== Number(levelFilter)
+          ? " (registered at level " + onRoster.level + " — clear the level filter or search the roster)"
+          : "";
+      document.getElementById("add-error").textContent =
+        "That index is already on this programme" + levelNote + ". Use Edit on their row to change details, or QR for their card.";
+      return;
+    }
+  }
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Saving…";
+  }
   Attendify.addStudent({
     id: editingId,
     classId: classId,
@@ -249,15 +293,24 @@ document.getElementById("add-form").addEventListener("submit", function (event) 
     email: document.getElementById("student-email").value,
     photo: photo,
     source: editingId ? undefined : "lecturer"
-  }).then(function (result) {
-    if (!result.ok) {
-      document.getElementById("add-error").textContent = result.error;
-      return;
-    }
-    closeAddModal();
-    renderRoster();
-    if (!editingId) showQr(result.student);
-  });
+  })
+    .then(function (result) {
+      if (!result.ok) {
+        document.getElementById("add-error").textContent = result.error;
+        return;
+      }
+      closeAddModal();
+      renderRoster();
+      showQr(result.student, { fromSave: true });
+    })
+    .finally(function () {
+      if (addModal.classList.contains("hidden")) return;
+      addSavePending = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Save";
+      }
+    });
 });
 
 rosterBody.addEventListener("click", function (event) {
