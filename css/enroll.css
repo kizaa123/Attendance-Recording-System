@@ -46,6 +46,14 @@
   display: none;
 }
 
+.enroll-profile-img {
+  z-index: 10;
+}
+
+#enroll-profile-card {
+  padding-bottom: 0.15rem;
+}
+
 .enroll-photo-placeholder svg {
   width: 42%;
   height: 42%;

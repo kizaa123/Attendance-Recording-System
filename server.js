@@ -198,10 +198,31 @@ function isPublicApi(pathname, method) {
   if (pathname === "/api/state" && method === "GET") return true;
   if (pathname === "/api/enroll/context" && method === "GET") return true;
   if (pathname === "/api/enroll/student" && method === "GET") return true;
+  if (pathname === "/api/ucc/photo" && method === "GET") return true;
   if (pathname === "/api/students" && method === "POST") return true;
   if (pathname === "/api/attendance" && method === "POST") return true;
   if (pathname.indexOf("/api/ta/") === 0 && method === "GET") return true;
   return false;
+}
+
+function pipeUccPhoto(uccRes, res) {
+  if (!uccRes || !uccRes.statusCode || uccRes.statusCode !== 200) {
+    res.writeHead(uccRes && uccRes.statusCode ? uccRes.statusCode : 404);
+    res.end();
+    return;
+  }
+  const type = String(uccRes.headers["content-type"] || "image/jpeg");
+  if (type.indexOf("image/") !== 0) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+  res.writeHead(200, {
+    "Content-Type": type,
+    "Cache-Control": "public, max-age=1800",
+    "Access-Control-Allow-Origin": "*"
+  });
+  uccRes.pipe(res);
 }
 
 function isFacultyHtmlPage(pathname) {
@@ -266,6 +287,38 @@ function handleRequest(req, res) {
       200,
       db.enrollStudentLookup(url.searchParams.get("class"), url.searchParams.get("index"))
     );
+    return;
+  }
+  if (url.pathname === "/api/ucc/photo" && req.method === "GET") {
+    const tag = String(url.searchParams.get("tag") || url.searchParams.get("index") || "").trim();
+    if (!tag || tag.length < 4) {
+      res.writeHead(400);
+      res.end("bad tag");
+      return;
+    }
+    const remote =
+      "https://cdn.ucc.edu.gh/photos/?tag=" + encodeURIComponent(tag).replace(/%2F/gi, "/");
+    https
+      .get(remote, function (uccRes) {
+        if (uccRes.statusCode && uccRes.statusCode >= 300 && uccRes.statusCode < 400 && uccRes.headers.location) {
+          const next = String(uccRes.headers.location);
+          const follow = next.indexOf("https:") === 0 ? https : http;
+          follow
+            .get(next, function (uccRes2) {
+              pipeUccPhoto(uccRes2, res);
+            })
+            .on("error", function () {
+              res.writeHead(502);
+              res.end();
+            });
+          return;
+        }
+        pipeUccPhoto(uccRes, res);
+      })
+      .on("error", function () {
+        res.writeHead(502);
+        res.end();
+      });
     return;
   }
   if (url.pathname === "/api/state" && req.method === "GET") {

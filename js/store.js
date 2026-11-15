@@ -653,13 +653,29 @@
     window.alert("Could not open the print view. Allow pop-ups, or use Export CSV.");
   }
 
+  function enrollApiUrl(path) {
+    var p = String(path || "");
+    if (p.indexOf("/") !== 0) p = "/" + p;
+    if (window.location.protocol === "file:") return API_BASE + p;
+    return window.location.origin + p;
+  }
+
+  function uccPhotoPageUrl(indexNumber) {
+    var tag = String(indexNumber || "").trim();
+    if (!tag) return "";
+    if (window.location.protocol === "file:") return uccPhotoUrl(tag);
+    return (
+      enrollApiUrl("/api/ucc/photo") + "?tag=" + encodeURIComponent(tag)
+    );
+  }
+
   function fetchEnrollContext(classId, level) {
     var qs =
       "?class=" +
       encodeURIComponent(String(classId || "")) +
       "&level=" +
       encodeURIComponent(String(level || ""));
-    return apiFetch("/api/enroll/context" + qs)
+    return fetch(enrollApiUrl("/api/enroll/context" + qs), { credentials: "same-origin" })
       .then(function (response) {
         return response.json();
       })
@@ -674,7 +690,7 @@
       encodeURIComponent(String(classId || "")) +
       "&index=" +
       encodeURIComponent(String(index || ""));
-    return apiFetch("/api/enroll/student" + qs)
+    return fetch(enrollApiUrl("/api/enroll/student" + qs), { credentials: "same-origin" })
       .then(function (response) {
         return response.json();
       })
@@ -1918,6 +1934,7 @@
     activeSessionFor: activeSessionFor,
     photoFromFile: photoFromFile,
     uccPhotoUrl: uccPhotoUrl,
+    uccPhotoPageUrl: uccPhotoPageUrl,
     studentPhotoUrl: studentPhotoUrl,
     resolveUccPhoto: resolveUccPhoto,
     bindUccPhotoPreview: bindUccPhotoPreview,

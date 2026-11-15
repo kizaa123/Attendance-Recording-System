@@ -2,6 +2,8 @@ var uccPhotoForSubmit = "";
 var enrollLevel = "";
 var enrollClassId = "";
 var profileLookupTimer = null;
+var profilePhotoTimer = null;
+var profilePhotoToken = 0;
 
 function levelFromQuery() {
   return new URLSearchParams(window.location.search).get("level") || "";
@@ -31,35 +33,112 @@ function setIntro(course) {
     "</strong>. Enter your index number, confirm your name, and check your profile photo.";
 }
 
+function profileEls() {
+  return {
+    placeholder: document.getElementById("ucc-photo-placeholder"),
+    img: document.getElementById("ucc-photo-img"),
+    spinner: document.getElementById("ucc-photo-spinner"),
+    status: document.getElementById("ucc-photo-status"),
+    card: document.getElementById("enroll-profile-card"),
+    cardName: document.getElementById("enroll-profile-name"),
+    cardIndex: document.getElementById("enroll-profile-index")
+  };
+}
+
 function updatePhotoPlaceholder(show) {
   var placeholder = document.getElementById("ucc-photo-placeholder");
   if (!placeholder) return;
   placeholder.classList.toggle("hidden", !show);
 }
 
-function showProfilePhoto(url) {
-  var img = document.getElementById("ucc-photo-img");
-  if (!img || !url) return;
-  img.src = url;
-  img.classList.remove("hidden");
-  updatePhotoPlaceholder(false);
+function resetEnrollProfile() {
+  var el = profileEls();
+  uccPhotoForSubmit = "";
+  if (el.img) {
+    el.img.removeAttribute("src");
+    el.img.classList.add("hidden");
+  }
+  updatePhotoPlaceholder(true);
+  if (el.spinner) el.spinner.classList.add("hidden");
+  if (el.status) el.status.textContent = "Enter your index number above to load your profile photo.";
+  if (el.card) el.card.classList.add("hidden");
+  if (el.cardName) el.cardName.textContent = "";
+  if (el.cardIndex) el.cardIndex.textContent = "";
 }
 
-function applyStudentProfile(student) {
+function showProfileCard(index, name) {
+  var el = profileEls();
+  if (!el.card) return;
+  el.card.classList.remove("hidden");
+  if (el.cardIndex) el.cardIndex.textContent = index;
+  if (el.cardName) el.cardName.textContent = name || "Confirm your name below";
+}
+
+function loadProfilePhoto(index) {
+  clearTimeout(profilePhotoTimer);
+  var needle = String(index || "").trim();
+  if (needle.length < 4) {
+    resetEnrollProfile();
+    return;
+  }
+  uccPhotoForSubmit = Attendify.uccPhotoUrl(needle);
+  profilePhotoTimer = setTimeout(function () {
+    var el = profileEls();
+    var run = ++profilePhotoToken;
+    if (el.spinner) el.spinner.classList.remove("hidden");
+    if (el.status) el.status.textContent = "Loading profile photo…";
+    if (el.img) el.img.classList.add("hidden");
+    updatePhotoPlaceholder(true);
+    showProfileCard(needle, "");
+
+    var photoUrl = Attendify.uccPhotoPageUrl(needle);
+    if (!el.img || !photoUrl) {
+      if (el.spinner) el.spinner.classList.add("hidden");
+      if (el.status) el.status.textContent = "Enter a valid index number.";
+      return;
+    }
+
+    el.img.onload = function () {
+      if (run !== profilePhotoToken) return;
+      if (el.spinner) el.spinner.classList.add("hidden");
+      el.img.classList.remove("hidden");
+      updatePhotoPlaceholder(false);
+      if (el.status) el.status.textContent = "Profile photo loaded.";
+    };
+    el.img.onerror = function () {
+      if (run !== profilePhotoToken) return;
+      if (el.spinner) el.spinner.classList.add("hidden");
+      el.img.classList.add("hidden");
+      updatePhotoPlaceholder(true);
+      if (el.status) {
+        el.status.textContent = "No photo found for this index — you can still register.";
+      }
+    };
+    el.img.src = photoUrl + (photoUrl.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();
+  }, 350);
+}
+
+function applyStudentProfile(student, index) {
   if (!student) return;
   var nameInput = document.getElementById("name");
   var emailInput = document.getElementById("email");
-  if (nameInput && !nameInput.value.trim() && student.name) {
+  var idx = student.index || index || "";
+  if (nameInput && student.name && !nameInput.value.trim()) {
     nameInput.value = student.name;
   }
-  if (emailInput && !emailInput.value.trim() && student.email) {
+  if (emailInput && student.email && !emailInput.value.trim()) {
     emailInput.value = student.email;
   }
-  var photo = student.photo && String(student.photo).trim() ? student.photo : Attendify.uccPhotoUrl(student.index);
-  if (photo) {
-    uccPhotoForSubmit = photo;
-    showProfilePhoto(photo);
+  if (student.photo && String(student.photo).trim()) {
+    var el = profileEls();
+    if (el.img) {
+      el.img.src = student.photo;
+      el.img.classList.remove("hidden");
+      updatePhotoPlaceholder(false);
+      uccPhotoForSubmit = student.photo;
+    }
   }
+  showProfileCard(idx, student.name || "");
   var statusEl = document.getElementById("ucc-photo-status");
   if (statusEl && student.name) {
     statusEl.textContent = "Profile loaded. Confirm your name below.";
@@ -69,64 +148,65 @@ function applyStudentProfile(student) {
 function lookupProfileForIndex(index) {
   clearTimeout(profileLookupTimer);
   var needle = String(index || "").trim();
-  if (!enrollClassId || needle.length < 4) return;
+  var classId = enrollClassId || Attendify.requestedClassId();
+  if (!classId || needle.length < 4) return;
   profileLookupTimer = setTimeout(function () {
-    Attendify.fetchEnrollStudent(enrollClassId, needle).then(function (result) {
+    Attendify.fetchEnrollStudent(classId, needle).then(function (result) {
       if (result && result.ok && result.student) {
-        applyStudentProfile(result.student);
+        applyStudentProfile(result.student, needle);
+      } else {
+        showProfileCard(needle, document.getElementById("name").value.trim());
       }
     });
-  }, 500);
+  }, 450);
 }
 
-function bindProfilePreview(indexInput) {
+function bindIndexInput(indexInput) {
   if (!indexInput) return;
-  Attendify.bindUccPhotoPreview(indexInput, {
-    keepPreviewVisible: true,
-    previewEl: document.getElementById("ucc-photo-preview"),
-    imgEl: document.getElementById("ucc-photo-img"),
-    spinnerEl: document.getElementById("ucc-photo-spinner"),
-    statusEl: document.getElementById("ucc-photo-status"),
-    hidePlaceholder: updatePhotoPlaceholder,
-    onChange: function (result) {
-      var index = String(indexInput.value || "").trim();
-      uccPhotoForSubmit = result.url || Attendify.uccPhotoUrl(index);
-      updatePhotoPlaceholder(!(result.ok && result.url));
-      var statusEl = document.getElementById("ucc-photo-status");
-      if (statusEl && !result.ok && !index) {
-        statusEl.textContent = "Enter your index number to load your profile photo.";
-      }
-      if (result.ok) {
-        lookupProfileForIndex(index);
-      }
-    }
-  });
   indexInput.addEventListener("input", function () {
+    var index = indexInput.value;
+    loadProfilePhoto(index);
+    lookupProfileForIndex(index);
+  });
+  indexInput.addEventListener("blur", function () {
+    loadProfilePhoto(indexInput.value);
     lookupProfileForIndex(indexInput.value);
   });
 }
 
 function initEnrollPage() {
+  if (typeof Attendify === "undefined") return;
   enrollClassId = Attendify.requestedClassId();
   var indexInput = document.getElementById("index");
-  bindProfilePreview(indexInput);
+  bindIndexInput(indexInput);
+  resetEnrollProfile();
 
   var levelQ = levelFromQuery();
   Attendify.fetchEnrollContext(enrollClassId, levelQ).then(function (ctx) {
-    if (!ctx || !ctx.ok || !ctx.course) {
-      var intro = document.getElementById("enroll-intro");
-      if (intro) {
-        intro.textContent =
-          (ctx && ctx.error) || "This registration link is not valid. Ask your lecturer to send the link again.";
-      }
-      var form = document.getElementById("enroll-form");
-      if (form) form.classList.add("hidden");
+    if (ctx && ctx.ok && ctx.course) {
+      enrollClassId = ctx.course.id;
+      var level = ctx.level != null && ctx.level !== "" ? ctx.level : levelQ;
+      applyEnrollLevel(level);
+      setIntro(ctx.course);
       return;
     }
-    enrollClassId = ctx.course.id;
-    var level = ctx.level != null && ctx.level !== "" ? ctx.level : levelQ;
-    applyEnrollLevel(level);
-    setIntro(ctx.course);
+    if (enrollClassId) {
+      applyEnrollLevel(levelQ);
+      setIntro({ code: "", name: "this programme" });
+      var intro = document.getElementById("enroll-intro");
+      if (intro && ctx && ctx.error) {
+        intro.textContent =
+          "Register for this programme. " + ctx.error + " If registration fails, ask your lecturer for a new link.";
+      }
+      return;
+    }
+    var intro = document.getElementById("enroll-intro");
+    if (intro) {
+      intro.textContent =
+        (ctx && ctx.error) || "This registration link is not valid. Ask your lecturer to send the link again.";
+    }
+    var form = document.getElementById("enroll-form");
+    if (form) form.classList.add("hidden");
   });
 }
 
