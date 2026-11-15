@@ -186,8 +186,9 @@
       document.write('<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"><\/script>');
     }
   </script>
-  <script src="js/store.js?v=20"></script>
-  <script src="js/scanner-hud.js?v=23"></script>
+  <script src="js/scan-cache.js?v=1"></script>
+  <script src="js/store.js?v=37"></script>
+  <script src="js/scanner-hud.js?v=24"></script>
   <script>
   (function () {
     "use strict";
@@ -195,9 +196,10 @@
     // ─── State ────────────────────────────────────────────────────────────────
     var taToken = "";
     var sessionCtx = null;   // { sessionId, classId, lectureName, weekNumber, courseId, programme }
-    var apiBase = "";
     var scanner = null;
     var cameraFacing = "environment";
+    var cameraStarting = false;
+    var scanBusy = false;
     var lastCode = "";
     var lastScanAt = 0;
     var scannedStudents = [];  // local scan log for this TA session
@@ -264,8 +266,7 @@
     }
 
     function apiUrl(path) {
-      if (apiBase) return apiBase.replace(/\/$/, "") + path;
-      if (window.location.protocol === "file:") return "http://localhost:3000" + path;
+      if (window.location.protocol === "file:") return "http://127.0.0.1:3000" + path;
       return path;
     }
 
@@ -288,40 +289,54 @@
       return;
     }
 
-    // Resolve server origin or use current window location
-    function isLoopbackHost(name) {
-      var h = String(name || "").toLowerCase();
-      return h === "localhost" || h === "127.0.0.1" || h === "[::1]";
-    }
-    apiBase = window.location.origin;
-    fetch("/api/host")
-      .then(function (r) { return r.json(); })
-      .then(function (h) {
-        if (!h) return;
-        if (h.publicOrigin) apiBase = h.publicOrigin.replace(/\/$/, "");
-        else if (h.requestOrigin) apiBase = h.requestOrigin.replace(/\/$/, "");
-        else if (h.origin && isLoopbackHost(window.location.hostname)) apiBase = String(h.origin).replace(/\/$/, "");
-      })
-      .catch(function () {})
-      .finally(function () {
-        loadSession();
+    function rosterFromSession(ctx) {
+      var rows = (ctx && ctx.roster) || [];
+      var Cache = window.AttendifyScanCache;
+      if (!Cache) return rows;
+      return rows.map(function (row) {
+        return Cache.normalizeStudent(row);
       });
+    }
+
+    function rememberSession(data) {
+      sessionCtx = data.session;
+      programmeStudents = rosterFromSession(sessionCtx);
+      if (window.AttendifyScanCache) {
+        AttendifyScanCache.saveTaSessionCache(taToken, {
+          session: sessionCtx,
+          savedAt: new Date().toISOString()
+        });
+      }
+    }
 
     function loadSession() {
-      fetch(apiUrl("/api/ta/" + encodeURIComponent(taToken)))
+      fetch(apiUrl("/api/ta/" + encodeURIComponent(taToken)), { credentials: "same-origin" })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (!data.ok) {
+            if (data.code === "ENROLL_REDIRECT" && data.redirect) {
+              window.location.replace(data.redirect);
+              return;
+            }
             showError(data.message || "This link has expired or the session has ended.");
             return;
           }
-          sessionCtx = data.session;
+          rememberSession(data);
           bootUI();
         })
         .catch(function () {
-          showError("Could not connect to Attendify. Make sure you are on the same network as the lecturer's computer.");
+          var cached = window.AttendifyScanCache && AttendifyScanCache.loadTaSessionCache(taToken);
+          if (cached && cached.session) {
+            rememberSession({ session: cached.session });
+            bootUI();
+            showToast("Offline mode — scans save on this device and sync when online.", "amber");
+            return;
+          }
+          showError("Could not connect to Attendify. Open the link on the same Wi-Fi using the address your lecturer shared (not localhost).");
         });
     }
+
+    loadSession();
 
     function bootUI() {
       document.getElementById("loadingScreen").classList.add("hidden");
@@ -352,77 +367,68 @@
       // Give DOM time to calculate dimensions before initializing camera
       setTimeout(startCamera, 250);
 
-      // Pre-load programme students for manual attendance
-      loadProgrammeRoster();
+      // Roster comes with session (no heavy /api/state fetch)
+      renderManualRoster();
 
-      // Poll for new scans from other devices every 6s
-      setInterval(pollSession, 6000);
+      flushTaScanQueue();
+
+      if (navigator.onLine !== false) {
+        setInterval(pollSession, 18000);
+      } else {
+        window.addEventListener("online", function () {
+          flushTaScanQueue();
+          pollSession();
+        });
+      }
     }
 
     // ─── Camera Management ────────────────────────────────────────────────────
     function startCamera() {
+      if (cameraStarting) return;
+      var Hud = window.AttendifyScannerHud;
       if (typeof Html5Qrcode === "undefined") {
         showCameraPrompt("Scanner library is still loading. Tap to retry.");
         return;
       }
-
-      var isSecure = window.isSecureContext || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      if (!isSecure && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
+      if (Hud && Hud.isCameraContextOk && !Hud.isCameraContextOk()) {
         showCameraPrompt(
-          "The camera needs a secure (HTTPS) connection.<br><span class='text-[10px] text-slate-400 mt-1 block'>Ask your lecturer for an updated scanner link, then allow camera access.</span>"
+          Hud.cameraContextHint
+            ? Hud.cameraContextHint()
+            : "The camera needs a secure connection. Use the HTTPS or network link from your lecturer."
         );
         return;
       }
-
-      var config =
-        window.AttendifyScannerHud && AttendifyScannerHud.getCameraConfig
-          ? AttendifyScannerHud.getCameraConfig()
-          : {
-              fps: 18,
-              disableFlip: false,
-              qrbox: function (viewfinderWidth, viewfinderHeight) {
-                return {
-                  width: Math.floor(viewfinderWidth),
-                  height: Math.floor(viewfinderHeight)
-                };
-              }
-            };
-
-      try {
-        if (!scanner) {
-          scanner = new Html5Qrcode("ta-qr-reader", {
-            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-            verbose: false
-          });
-        }
-      } catch (e) {
-        console.warn("Html5Qrcode instantiation:", e);
+      if (!Hud || !Hud.startQrCamera) {
+        showCameraPrompt("Scanner failed to initialize. Tap to retry.");
+        return;
       }
-
-      // Start with environment (rear) camera
-      scanner.start({ facingMode: "environment" }, config, onScan, function () {})
+      cameraStarting = true;
+      stopCamera()
+        .then(function () {
+          return Hud.warmCameraLayout
+            ? new Promise(function (resolve) {
+                Hud.warmCameraLayout("ta-qr-reader", resolve);
+              })
+            : Promise.resolve();
+        })
+        .then(function () {
+          return Hud.startQrCamera({
+            readerId: "ta-qr-reader",
+            facing: cameraFacing,
+            onScan: onScan,
+            onScanner: function (instance) {
+              scanner = instance;
+            }
+          });
+        })
         .then(function () {
           hideCameraPrompt();
         })
         .catch(function (err) {
-          console.warn("Facing environment failed, attempting user camera:", err);
-          // Try user (front) facing fallback
-          try {
-            scanner = new Html5Qrcode("ta-qr-reader", {
-              experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-              verbose: false
-            });
-            scanner.start({ facingMode: "user" }, config, onScan, function () {})
-              .then(function () {
-                hideCameraPrompt();
-              })
-              .catch(function (err2) {
-                console.error("Camera start failed entirely:", err2);
-                handleCameraError(err2);
-              });
-          } catch (e2) {
-            handleCameraError(err);
-          }
+          handleCameraError(err);
+        })
+        .finally(function () {
+          cameraStarting = false;
         });
     }
 
@@ -438,12 +444,22 @@
     }
 
     function stopCamera() {
-      if (!scanner) return;
-      var s = scanner;
+      var current = scanner;
       scanner = null;
-      if (s.isScanning) {
-        s.stop().then(function () { return s.clear(); }).catch(function () {});
+      cameraStarting = false;
+      var Hud = window.AttendifyScannerHud;
+      if (Hud && Hud.releaseCamera) {
+        return Hud.releaseCamera(current, "ta-qr-reader");
       }
+      if (current && current.isScanning) {
+        return current
+          .stop()
+          .then(function () {
+            return current.clear();
+          })
+          .catch(function () {});
+      }
+      return Promise.resolve();
     }
 
     function showCameraPrompt(msg) {
@@ -470,35 +486,155 @@
 
     // ─── Scan handling ────────────────────────────────────────────────────────
     function onScan(text) {
+      if (scanBusy) return;
       var now = Date.now();
-      if (text === lastCode && now - lastScanAt < 2000) return;
+      if (text === lastCode && now - lastScanAt < 600) return;
       lastCode = text;
       lastScanAt = now;
       submitScan(text);
     }
 
-    function submitScan(text) {
-      var parsed = parseQrText(text);
+    function attendancePayload(parsed, text) {
       var payload = {
         classId: sessionCtx.classId,
         weekNumber: sessionCtx.weekNumber
       };
       if (sessionCtx.courseId) payload.courseId = sessionCtx.courseId;
       else payload.lectureName = sessionCtx.lectureName;
-
       if (parsed && parsed.qrToken) payload.qrToken = parsed.qrToken;
       else if (parsed && parsed.index) payload.index = parsed.index;
       else payload.index = text;
+      return payload;
+    }
 
-      fetch(apiUrl("/api/attendance"), {
+    function postAttendance(payload) {
+      return fetch(apiUrl("/api/attendance"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      })
-        .then(function (r) { return r.json(); })
-        .then(handleScanResult)
+      }).then(function (r) {
+        return r.json();
+      });
+    }
+
+    function flushTaScanQueue() {
+      var Cache = window.AttendifyScanCache;
+      if (!Cache || !navigator.onLine) return;
+      Cache.flushQueue(taToken, postAttendance, function (result) {
+        if (result && result.ok && result.student && result.record) {
+          mergeServerRecord(result);
+        }
+      }).then(function (n) {
+        if (n > 0) showToast(n + " offline scan" + (n === 1 ? "" : "s") + " synced.", "teal");
+      });
+    }
+
+    function mergeServerRecord(result) {
+      var student = result.student;
+      var rec = result.record;
+      if (!student || !rec) return;
+      var existing = scannedStudents.filter(function (s) {
+        return s.studentId === student.id;
+      })[0];
+      if (existing) {
+        existing.scannedAt = rec.scannedAt || existing.scannedAt;
+        return;
+      }
+      scannedStudents.unshift({
+        studentId: student.id,
+        name: student.name,
+        index: student.index,
+        photo: student.photo || "",
+        scannedAt: rec.scannedAt
+      });
+      renderRecent();
+      renderManualRoster();
+    }
+
+    function revertLocalScan(studentId) {
+      scannedStudents = scannedStudents.filter(function (s) {
+        return s.studentId !== studentId;
+      });
+      renderRecent();
+      renderManualRoster();
+    }
+
+    function submitScan(text) {
+      if (scanBusy) return;
+      scanBusy = true;
+      var parseFn =
+        typeof Attendify !== "undefined" && Attendify.parseQr ? Attendify.parseQr : parseQrText;
+      var parsed = parseFn(text);
+      var Cache = window.AttendifyScanCache;
+      var student = Cache
+        ? Cache.resolveScan(text, programmeStudents, sessionCtx.classId, parseFn)
+        : null;
+      if (!student) {
+        playTone("err");
+        showToast("Not on this class roster.", "rose");
+        scanBusy = false;
+        setTimeout(function () {
+          lastCode = "";
+        }, 800);
+        return;
+      }
+
+      var isDup = scannedStudents.some(function (s) {
+        return s.studentId === student.id;
+      });
+      var scannedAt = new Date().toISOString();
+      var localResult = {
+        ok: true,
+        duplicate: isDup,
+        student: {
+          id: student.id,
+          name: student.name,
+          index: student.index,
+          photo: student.photo || ""
+        },
+        record: { studentId: student.id, scannedAt: scannedAt }
+      };
+      handleScanResult(localResult);
+
+      var payload = attendancePayload(parsed, text);
+      if (isDup) {
+        scanBusy = false;
+        return;
+      }
+
+      if (!navigator.onLine) {
+        if (Cache) Cache.enqueue(taToken, payload);
+        showToast("Saved on device — will sync when online.", "amber");
+        scanBusy = false;
+        return;
+      }
+
+      postAttendance(payload)
+        .then(function (result) {
+          if (result && result.ok) {
+            if (result.record && result.record.scannedAt) {
+              mergeServerRecord(result);
+            }
+            return;
+          }
+          if (result && result.error === "session_closed") {
+            showSessionClosed();
+            return;
+          }
+          if (result && (result.error === "not_enrolled" || result.error === "unknown")) {
+            revertLocalScan(student.id);
+            showToast(result.message || "Scan was not accepted on the server.", "rose");
+            return;
+          }
+          if (Cache) Cache.enqueue(taToken, payload);
+          showToast("Slow connection — scan queued to sync.", "amber");
+        })
         .catch(function () {
-          showToast("Network error — try again.", "rose");
+          if (Cache) Cache.enqueue(taToken, payload);
+          showToast("Network error — saved locally, camera still running.", "amber");
+        })
+        .finally(function () {
+          scanBusy = false;
         });
     }
 
@@ -526,6 +662,9 @@
           return;
         }
         showToast(msg, "rose");
+        setTimeout(function () {
+          lastCode = "";
+        }, 800);
         return;
       }
       var student = result.student;
@@ -548,10 +687,16 @@
 
     // ─── Poll for remote updates ───────────────────────────────────────────────
     function pollSession() {
+      if (!navigator.onLine) return;
       fetch(apiUrl("/api/ta/" + encodeURIComponent(taToken)))
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          if (!data.ok) { showSessionClosed(); return; }
+          if (!data.ok) {
+            if (data.error === "invalid_token" || data.error === "session_closed") {
+              showSessionClosed();
+            }
+            return;
+          }
           var remote = data.session.records || [];
           var updated = false;
           remote.forEach(function (rec) {
@@ -678,26 +823,6 @@
     }
 
     // ─── Manual Attendance Feature ───────────────────────────────────────────
-    function loadProgrammeRoster() {
-      fetch(apiUrl("/api/state"))
-        .then(function (r) { return r.json(); })
-        .then(function (state) {
-          programmeStudents = (state.students || []).filter(function (s) {
-            return s.classId === sessionCtx.classId;
-          });
-          // Backfill photos into scannedStudents if any are missing
-          scannedStudents.forEach(function (ss) {
-            if (!ss.photo) {
-              var found = programmeStudents.find(function (p) { return p.id === ss.studentId || p.index === ss.index; });
-              if (found && found.photo) ss.photo = found.photo;
-            }
-          });
-          renderRecent();
-          renderManualRoster();
-        })
-        .catch(function () {});
-    }
-
     function openManualModal() {
       document.getElementById("manualModal").classList.remove("hidden");
       document.getElementById("manual-error").classList.add("hidden");

@@ -2290,7 +2290,7 @@ function createTaToken(input) {
 
   const token = crypto.randomUUID() + "-" + crypto.randomBytes(8).toString("hex");
   const now = new Date();
-  const expiryHours = Number(input.expiryHours) || 12;
+  const expiryHours = Number(input.expiryHours) || 72;
   const expiresAt = new Date(now.getTime() + expiryHours * 60 * 60 * 1000).toISOString();
 
   // Reuse existing token if one already exists for this session (idempotent)
@@ -2309,17 +2309,39 @@ function createTaToken(input) {
 /**
  * Resolve a TA token → session context. Returns null if invalid/expired.
  */
+function enrollRedirectForScanToken(token) {
+  openDb();
+  const id = String(token || "").trim();
+  if (!id || id.length < 2) return { ok: false };
+  const row = db.prepare("SELECT id FROM classes WHERE id = ?").get(id);
+  if (!row) return { ok: false };
+  const lvl = db
+    .prepare("SELECT level FROM lecturer_programmes WHERE class_id = ? ORDER BY level LIMIT 1")
+    .get(id);
+  return {
+    ok: true,
+    classId: row.id,
+    level: lvl != null ? lvl.level : null
+  };
+}
+
 function resolveTaToken(token) {
   openDb();
   if (!token) return null;
-  const now = new Date().toISOString();
-  const row = db.prepare(
-    "SELECT token, session_id AS sessionId, class_id AS classId, lecture_name AS lectureName, week_number AS weekNumber, course_id AS courseId, expires_at AS expiresAt FROM ta_tokens WHERE token = ? AND expires_at > ?"
-  ).get(String(token).trim(), now);
+  const row = db
+    .prepare(
+      "SELECT token, session_id AS sessionId, class_id AS classId, lecture_name AS lectureName, week_number AS weekNumber, course_id AS courseId, expires_at AS expiresAt FROM ta_tokens WHERE token = ?"
+    )
+    .get(String(token).trim());
   if (!row) return null;
-  // Check session not closed
   const session = db.prepare("SELECT closed_at AS closedAt FROM attendance_sessions WHERE id = ?").get(row.sessionId);
   if (!session || session.closedAt) return null;
+  const nowIso = new Date().toISOString();
+  if (String(row.expiresAt) < nowIso) {
+    const newExp = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+    db.prepare("UPDATE ta_tokens SET expires_at = ? WHERE token = ?").run(newExp, row.token);
+    row.expiresAt = newExp;
+  }
   return row;
 }
 
@@ -2329,12 +2351,34 @@ function resolveTaToken(token) {
 function getTaSession(token) {
   openDb();
   const ctx = resolveTaToken(token);
-  if (!ctx) return { ok: false, error: "invalid_token", message: "This link has expired or the session has ended." };
+  if (!ctx) {
+    const enroll = enrollRedirectForScanToken(token);
+    if (enroll.ok) {
+      var qs = "class=" + encodeURIComponent(enroll.classId);
+      if (enroll.level != null && enroll.level !== "") qs += "&level=" + encodeURIComponent(String(enroll.level));
+      return {
+        ok: false,
+        code: "ENROLL_REDIRECT",
+        redirect: "/enroll.html?" + qs,
+        message: "This is a student registration link, not a scanner link. Opening registration…"
+      };
+    }
+    return { ok: false, error: "invalid_token", message: "This link has expired or the session has ended." };
+  }
 
   const classRow = db.prepare("SELECT id, code, name, department FROM classes WHERE id = ?").get(ctx.classId);
   const records = db.prepare(
     "SELECT ar.student_id AS studentId, ar.scanned_at AS scannedAt, st.name, st.index_number AS studentIndex, st.photo FROM attendance_records ar INNER JOIN students st ON st.id = ar.student_id WHERE ar.session_id = ? ORDER BY ar.scanned_at"
   ).all(ctx.sessionId);
+
+  const roster = db
+    .prepare(
+      `SELECT DISTINCT s.id, s.class_id AS classId, s.name, s.index_number AS studentIndex, s.photo, s.qr_public_id AS qrPublicId
+       FROM students s
+       WHERE s.class_id = ?
+          OR s.class_id IN (SELECT class_id FROM attendance_session_classes WHERE session_id = ?)`
+    )
+    .all(ctx.classId, ctx.sessionId);
 
   return {
     ok: true,
@@ -2345,7 +2389,8 @@ function getTaSession(token) {
       weekNumber: ctx.weekNumber,
       courseId: ctx.courseId || null,
       programme: classRow ? { code: classRow.code, name: classRow.name } : null,
-      records: records
+      records: records,
+      roster: roster
     }
   };
 }
@@ -2387,5 +2432,6 @@ module.exports = {
   removeAttendanceRecord,
   createTaToken,
   resolveTaToken,
+  enrollRedirectForScanToken,
   getTaSession
 };

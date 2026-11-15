@@ -649,6 +649,26 @@ function handleRequest(req, res) {
   }
   const scanMatch = rel.match(/^\/scan\/([^/]+)\/?$/i);
   if (scanMatch) {
+    let scanToken = scanMatch[1];
+    try {
+      scanToken = decodeURIComponent(scanToken);
+    } catch (_) {}
+    if (!db.resolveTaToken(scanToken)) {
+      const enrollRedirect = db.enrollRedirectForScanToken(scanToken);
+      if (enrollRedirect.ok) {
+        const enrollParams = new URLSearchParams(url.search || "");
+        enrollParams.set("class", enrollRedirect.classId);
+        if (enrollRedirect.level != null && enrollRedirect.level !== "") {
+          enrollParams.set("level", String(enrollRedirect.level));
+        }
+        res.writeHead(302, {
+          Location: "/enroll.html?" + enrollParams.toString(),
+          "Cache-Control": "no-store"
+        });
+        res.end();
+        return;
+      }
+    }
     rel = "/ta-scanner.html";
   }
 

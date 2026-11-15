@@ -326,13 +326,18 @@
   function getCameraConfig(options) {
     options = options || {};
     var fullFrame = options.fullFrame !== false;
-    return {
-      fps: 18,
+    var cfg = {
+      fps: 24,
       disableFlip: false,
       qrbox: function (viewfinderWidth, viewfinderHeight) {
         return qrboxSizing(viewfinderWidth, viewfinderHeight, fullFrame);
-      }
+      },
+      aspectRatio: 1.333
     };
+    if (typeof Html5QrcodeSupportedFormats !== "undefined") {
+      cfg.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
+    }
+    return cfg;
   }
 
   function softVideoResolution(constraint) {

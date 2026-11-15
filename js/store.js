@@ -177,6 +177,7 @@
       })
       .then(function (state) {
         applyState(state);
+        flushPendingAttendanceScans();
         return cache;
       })
       .catch(function () {
@@ -890,6 +891,91 @@
       });
   }
 
+  function findStudentForScan(classId, index, qrToken) {
+    var students = load().students || [];
+    var i;
+    var token = String(qrToken || "").trim();
+    if (token) {
+      for (i = 0; i < students.length; i++) {
+        if (students[i].qrPublicId === token) return students[i];
+      }
+      return null;
+    }
+    var idx = String(index || "").trim();
+    if (!idx) return null;
+    for (i = 0; i < students.length; i++) {
+      if (students[i].classId === classId && String(students[i].index || "").toLowerCase() === idx.toLowerCase()) {
+        return students[i];
+      }
+    }
+    var digits = idx.replace(/\D/g, "");
+    if (digits.length > 0 && digits.length <= 4) {
+      var suffix = digits.padStart(4, "0").toLowerCase();
+      var hits = students.filter(function (student) {
+        if (student.classId !== classId) return false;
+        var tail = String(student.index || "")
+          .replace(/\D/g, "")
+          .slice(-4)
+          .toLowerCase();
+        return tail === suffix;
+      });
+      if (hits.length === 1) return hits[0];
+    }
+    return null;
+  }
+
+  function appendLocalAttendanceRecord(classId, lectureName, weekNumber, courseId, student) {
+    if (!student) return null;
+    var state = load();
+    var key = sessionKey(classId, lectureName, weekNumber);
+    var session = state.sessions[key];
+    if (!session || session.closedAt) return null;
+    session.records = session.records || [];
+    var j;
+    for (j = 0; j < session.records.length; j++) {
+      if (session.records[j].studentId === student.id) {
+        return {
+          ok: true,
+          duplicate: true,
+          student: student,
+          record: { studentId: student.id, scannedAt: session.records[j].scannedAt }
+        };
+      }
+    }
+    var scannedAt = new Date().toISOString();
+    session.records.push({ studentId: student.id, scannedAt: scannedAt });
+    return {
+      ok: true,
+      duplicate: false,
+      student: student,
+      record: { studentId: student.id, scannedAt: scannedAt },
+      optimistic: true
+    };
+  }
+
+  var LECTURER_SCAN_QUEUE = "lecturer";
+
+  function postAttendancePayload(payload) {
+    return apiFetch("/api/attendance", {
+      method: "POST",
+      body: withLecturer(payload)
+    })
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (result) {
+        if (result.state) applyState(result.state);
+        return result;
+      });
+  }
+
+  function flushPendingAttendanceScans() {
+    if (!global.AttendifyScanCache) return Promise.resolve(0);
+    return AttendifyScanCache.flushQueue(LECTURER_SCAN_QUEUE, function (payload) {
+      return postAttendancePayload(payload);
+    });
+  }
+
   function markPresent(scannerClassId, index, qrToken, lectureName, weekNumber) {
     var payload = withLecturer({ classId: scannerClassId });
     if (activeCourseId) payload.courseId = activeCourseId;
@@ -903,14 +989,35 @@
     if (week != null) payload.weekNumber = week;
     if (qrToken) payload.qrToken = qrToken;
     else if (index) payload.index = index;
-    return apiFetch("/api/attendance", {
-      method: "POST",
-      body: payload
-    }).then(function (response) { return response.json(); }).then(function (result) {
-      if (result.state) applyState(result.state);
-      return result;
-    }).catch(function () {
-      return { ok: false, error: "unknown" };
+
+    var student = findStudentForScan(scannerClassId, index, qrToken);
+    var local = student
+      ? appendLocalAttendanceRecord(scannerClassId, payload.lectureName, week, activeCourseId, student)
+      : null;
+    if (local && local.ok) {
+      var sync = function () {
+        return postAttendancePayload(payload).catch(function () {
+          if (global.AttendifyScanCache) AttendifyScanCache.enqueue(LECTURER_SCAN_QUEUE, payload);
+          return { ok: false, error: "queued" };
+        });
+      };
+      if (!navigator.onLine) {
+        if (global.AttendifyScanCache) AttendifyScanCache.enqueue(LECTURER_SCAN_QUEUE, payload);
+        return Promise.resolve(Object.assign({ queued: true }, local));
+      }
+      sync();
+      return Promise.resolve(local);
+    }
+
+    return postAttendancePayload(payload).catch(function () {
+      if (global.AttendifyScanCache) AttendifyScanCache.enqueue(LECTURER_SCAN_QUEUE, payload);
+      return { ok: false, error: "unknown", queued: true };
+    });
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("online", function () {
+      flushPendingAttendanceScans();
     });
   }
 
