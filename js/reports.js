@@ -698,7 +698,7 @@
 
   Attendify.ready().then(function () {
     var session = Attendify.requireLecturerSession && Attendify.requireLecturerSession();
-    if (session && session.lecturer) Attendify.paintLecturerChrome(session.lecturer, { sidebar: true });
+    if (session && session.lecturer) Attendify.paintLecturerChrome(session.lecturer, { sidebar: true, header: true });
     init();
   });
 })();

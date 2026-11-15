@@ -33,6 +33,11 @@
     document.getElementById("take-attendance-week").innerHTML = html;
   }
 
+  function syncTakeAttendanceWeekSelect() {
+    var takeWeek = document.getElementById("take-attendance-week");
+    if (takeWeek) takeWeek.value = String(selectedWeek);
+  }
+
   function latestWeekWithRecords() {
     var total = Attendify.semesterInfo().totalWeeks || 15;
     var w;
@@ -69,7 +74,20 @@
     return "—";
   }
 
+  function sessionBadgeKind(scanned, week) {
+    if (scanned) return "present";
+    if (isWeekClosed(week)) return "absent";
+    if (sessionHasRecords(week)) return "waiting";
+    return "";
+  }
+
   function statusBadgeHtml(scanned, week) {
+    var badge = window.AttendifyStudentList && AttendifyStudentList.attendanceSessionBadge;
+    var sessionUi = sessionHasRecords(week) || isWeekClosed(week);
+    if (sessionUi && badge) {
+      var kind = sessionBadgeKind(scanned, week);
+      if (kind) return badge(kind);
+    }
     if (scanned) {
       return '<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 shadow-xs">Present ✓</span>';
     }
@@ -80,6 +98,18 @@
       return '<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 shadow-xs">Waiting…</span>';
     }
     return '<span class="text-slate-400">—</span>';
+  }
+
+  function rosterUsesSessionCards(week) {
+    return sessionHasRecords(week) || isWeekClosed(week);
+  }
+
+  function setRosterSessionUi(on) {
+    var rosterTable = document.querySelector(".student-roster-table--attendance");
+    if (!rosterTable) return;
+    rosterTable.classList.toggle("student-roster-table--session-ui", !!on);
+    var rosterWrap = rosterTable.parentElement;
+    if (rosterWrap) rosterWrap.classList.toggle("course-roster-session-wrap", !!on);
   }
 
   function updateAbsentStatCard(sessionActive) {
@@ -328,6 +358,7 @@
         '<tr><td colspan="4" class="py-8 px-4 text-center text-slate-400">No students on this programme. <a class="text-brand-600 font-semibold" href="programme.html?programme=' +
         encodeURIComponent(programmeId) +
         '">Open registration</a>.</td></tr>';
+      setRosterSessionUi(false);
       return;
     }
     if (!showRoster) {
@@ -338,33 +369,45 @@
         " yet. Use Take attendance or pick another week.</td></tr>";
       updateWeekBanner();
       updateTakeAttendanceUi();
+      setRosterSessionUi(false);
       return;
     }
     var present = presentMapForWeek(selectedWeek);
     var presentCount = 0;
+    var sessionCards = rosterUsesSessionCards(selectedWeek);
     students = sortStudentsByAttendance(students, present);
     body.innerHTML = students
       .map(function (student) {
         var scanned = present[student.id];
         if (scanned) presentCount += 1;
         var status = statusBadgeHtml(scanned, selectedWeek);
+        var badgeKind = sessionBadgeKind(scanned, selectedWeek);
         var timeCell = scanned
           ? '<span class="font-mono text-slate-700 tabular-nums">' + esc(Attendify.formatTime(scanned)) + "</span>"
           : '<span class="text-slate-300">—</span>';
         var listUi = window.AttendifyStudentList;
-        var mobileIdentity =
-          listUi && listUi.identityHtml
-            ? listUi.identityHtml(student, {
-                index: true,
-                extra: scanned ? Attendify.formatTime(scanned) : ""
-              })
-            : esc(student.name);
+        var mobileBlock;
+        if (sessionCards && listUi && listUi.attendanceSessionRosterCard && badgeKind) {
+          mobileBlock =
+            '<div class="student-roster-mobile-only">' +
+            listUi.attendanceSessionRosterCard(student, badgeKind, scanned) +
+            "</div>";
+        } else {
+          var mobileIdentity =
+            listUi && listUi.identityHtml
+              ? listUi.identityHtml(student, {
+                  index: true,
+                  extra: scanned ? Attendify.formatTime(scanned) : ""
+                })
+              : esc(student.name);
+          mobileBlock = '<div class="student-roster-mobile-only">' + mobileIdentity + "</div>";
+        }
         return (
-          '<tr class="student-roster-row border-t border-slate-100">' +
+          '<tr class="student-roster-row' +
+          (sessionCards ? " student-roster-row--session" : "") +
+          ' border-t border-slate-100">' +
           '<td class="py-2.5 px-4 student-roster-main">' +
-          '<div class="student-roster-mobile-only">' +
-          mobileIdentity +
-          "</div>" +
+          mobileBlock +
           '<div class="hidden md:flex md:items-center md:gap-3 min-w-0">' +
           studentAvatarCell(student) +
           '<span class="font-semibold text-slate-800 truncate">' +
@@ -389,6 +432,7 @@
     updateTakeAttendanceUi();
     Attendify.hydrateAvatars(body);
     updateLiveScanBanner();
+    setRosterSessionUi(sessionCards);
   }
 
   function removeScanForStudent(studentId) {
@@ -722,6 +766,7 @@
 
   document.getElementById("course-week-filter").addEventListener("change", function (event) {
     selectedWeek = Number(event.target.value) || 1;
+    syncTakeAttendanceWeekSelect();
     renderTable();
     updateWeekBanner();
     updateTakeAttendanceUi();
@@ -732,7 +777,7 @@
 
   document.getElementById("btn-take-attendance").addEventListener("click", function () {
     if (isSelectedWeekClosed()) return;
-    document.getElementById("take-attendance-week").value = String(selectedWeek);
+    syncTakeAttendanceWeekSelect();
     document.getElementById("take-attendance-error").classList.add("hidden");
     document.getElementById("takeAttendanceModal").classList.remove("hidden");
   });
@@ -768,6 +813,7 @@
       document.getElementById("takeAttendanceModal").classList.add("hidden");
       document.getElementById("course-week-filter").value = String(week);
       selectedWeek = Number(week);
+      syncTakeAttendanceWeekSelect();
       openScanner(week, result.sessionId, true);
     });
   });
@@ -874,7 +920,7 @@
     if (!renderHeader()) return;
     selectedWeek = pickDefaultViewWeek();
     document.getElementById("course-week-filter").value = String(selectedWeek);
-    document.getElementById("take-attendance-week").value = String(selectedWeek);
+    syncTakeAttendanceWeekSelect();
     updateWeekBanner();
     updateTakeAttendanceUi();
     renderTable();
@@ -890,6 +936,7 @@
       ) {
         selectedWeek = Number(liveResume.weekNumber) || selectedWeek;
         document.getElementById("course-week-filter").value = String(selectedWeek);
+        syncTakeAttendanceWeekSelect();
         openScanner(selectedWeek, liveResume.sessionId || null, false);
       }
     }

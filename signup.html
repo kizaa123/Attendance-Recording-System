@@ -4,12 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Attendify — Sign up</title>
-  <meta http-equiv="refresh" content="0;url=login.html?mode=signup">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="js/auth-entry.js?v=1"></script>
   <script>
     (function () {
       var params = new URLSearchParams(window.location.search);
       params.set("mode", "signup");
-      window.location.replace("login.html?" + params.toString());
+      var qs = "?" + params.toString();
+      if (window.AttendifyAuthEntry) {
+        window.location.replace(
+          AttendifyAuthEntry.isMobileAuth()
+            ? AttendifyAuthEntry.mobileSplashHref(qs)
+            : "login.html" + qs
+        );
+        return;
+      }
+      window.location.replace("login.html" + qs);
     })();
   </script>
 </head>

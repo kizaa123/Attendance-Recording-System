@@ -204,7 +204,7 @@
   }
 
   var menuDotsSvg =
-    '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>';
+    '<svg class="faculty-menu-dots-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>';
 
   function closeAllCourseMenus() {
     document.querySelectorAll("[data-sidebar-course-menu]").forEach(function (el) {
@@ -374,6 +374,435 @@
     });
   }
 
+  function currentBottomNavKey() {
+    var nav = document.getElementById("faculty-nav");
+    var page = nav ? String(nav.getAttribute("data-page") || "") : "";
+    var path = String(window.location.pathname || "")
+      .split("/")
+      .pop()
+      .toLowerCase();
+    if (page === "dashboard" || path === "dashboard.html") return "dashboard";
+    if (page === "reports" || path === "reports.html") return "reports";
+    if (page === "settings" || path === "settings.html") return "settings";
+    if (page === "courses" || page === "programme" || path === "course.html" || path === "programme.html") {
+      return "attendance";
+    }
+    return "dashboard";
+  }
+
+  function attendanceNavHref() {
+    var params = new URLSearchParams(window.location.search);
+    var prog = params.get("programme") || params.get("class") || "";
+    var course = params.get("course") || "";
+    if (prog && course) {
+      return (
+        "course.html?programme=" + encodeURIComponent(prog) + "&course=" + encodeURIComponent(course)
+      );
+    }
+    try {
+      if (window.Attendify) {
+        var classId = activeClassId();
+        if (!classId) {
+          var state = Attendify.load();
+          classId = state.activeClassId || (state.classes[0] && state.classes[0].id) || "";
+        }
+        if (classId) {
+          var courses = Attendify.coursesForProgramme(classId) || [];
+          if (courses[0]) {
+            return (
+              "course.html?programme=" +
+              encodeURIComponent(classId) +
+              "&course=" +
+              encodeURIComponent(courses[0].id)
+            );
+          }
+          var lvl = params.get("level") || "";
+          return (
+            "programme.html?programme=" +
+            encodeURIComponent(classId) +
+            (lvl ? "&level=" + encodeURIComponent(lvl) : "")
+          );
+        }
+      }
+    } catch (_) {}
+    return "dashboard.html";
+  }
+
+  function programmeAttendanceLabel(programme) {
+    var bits = [];
+    if (programme.code) bits.push(String(programme.code));
+    if (programme.name) bits.push(String(programme.name));
+    var label = bits.join(" — ") || "Programme";
+    if (programme.teachLevel != null && programme.teachLevel !== "") {
+      label += " · L" + String(programme.teachLevel);
+    }
+    return label;
+  }
+
+  function courseAttendanceHref(programme, course) {
+    return (
+      "course.html?programme=" +
+      encodeURIComponent(programme.id) +
+      "&course=" +
+      encodeURIComponent(course.id)
+    );
+  }
+
+  function programmeAttendanceHref(programme) {
+    var href = "programme.html?programme=" + encodeURIComponent(programme.id);
+    if (programme.teachLevel != null && programme.teachLevel !== "") {
+      href += "&level=" + encodeURIComponent(programme.teachLevel);
+    }
+    return href;
+  }
+
+  function ensureMobileAttendancePickerModal() {
+    if (document.getElementById("mobile-attendance-picker")) return;
+    var modal = document.createElement("div");
+    modal.id = "mobile-attendance-picker";
+    modal.className =
+      "hidden fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-slate-900/55 backdrop-blur-sm p-0 sm:p-4";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "mobile-attendance-picker-title");
+    modal.innerHTML =
+      '<div class="mobile-attendance-picker-sheet bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-slate-200 w-full max-w-md max-h-[min(88vh,32rem)] flex flex-col">' +
+      '<div class="flex items-center gap-2 px-4 pt-4 pb-2 border-b border-slate-100 shrink-0">' +
+      '<button type="button" id="mobile-attendance-picker-back" class="hidden shrink-0 w-9 h-9 rounded-lg text-slate-600 hover:bg-slate-100 flex items-center justify-center" aria-label="Back">' +
+      '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>' +
+      '<div class="min-w-0 flex-1">' +
+      '<h3 id="mobile-attendance-picker-title" class="text-base font-bold text-slate-900 truncate">Attendance</h3>' +
+      '<p id="mobile-attendance-picker-subtitle" class="text-[11px] text-slate-500 mt-0.5 truncate"></p>' +
+      "</div>" +
+      '<button type="button" id="mobile-attendance-picker-close" class="shrink-0 w-9 h-9 rounded-lg text-slate-500 hover:bg-slate-100 flex items-center justify-center" aria-label="Close">' +
+      '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
+      "</button></div>" +
+      '<div id="mobile-attendance-picker-list" class="overflow-y-auto flex-1 px-3 py-3 space-y-2"></div>' +
+      "</div>";
+    document.body.appendChild(modal);
+
+    var pickerState = { programmes: [], programmeIndex: -1 };
+
+    function closePicker() {
+      modal.classList.add("hidden");
+      pickerState.programmeIndex = -1;
+      document.getElementById("mobile-attendance-picker-list").innerHTML = "";
+    }
+
+    function renderProgrammeStep() {
+      var programmes = pickerState.programmes;
+      var title = document.getElementById("mobile-attendance-picker-title");
+      var subtitle = document.getElementById("mobile-attendance-picker-subtitle");
+      var list = document.getElementById("mobile-attendance-picker-list");
+      var backBtn = document.getElementById("mobile-attendance-picker-back");
+      if (title) title.textContent = "Choose programme";
+      if (subtitle) subtitle.textContent = "Select where you want to take attendance.";
+      if (backBtn) backBtn.classList.add("hidden");
+      list.innerHTML = programmes
+        .map(function (programme, index) {
+          return (
+            '<button type="button" data-attendance-pick="programme" data-programme-index="' +
+            index +
+            '" class="mobile-attendance-picker-item w-full text-left px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-brand-50 hover:border-brand-200 transition">' +
+            '<span class="block text-sm font-bold text-brand-900">' +
+            escapeHtml(programme.code || programme.id) +
+            "</span>" +
+            '<span class="block text-xs text-slate-600 mt-0.5">' +
+            escapeHtml(programme.name || "") +
+            (programme.teachLevel != null && programme.teachLevel !== ""
+              ? ' <span class="font-semibold text-teal-700">· L' + escapeHtml(programme.teachLevel) + "</span>"
+              : "") +
+            "</span></button>"
+          );
+        })
+        .join("");
+    }
+
+    function openCourseStep(programme, showBack) {
+      if (!programme || !window.Attendify) return;
+      var courses = Attendify.coursesForProgramme(programme.id) || [];
+      if (!courses.length) {
+        closePicker();
+        window.location.href = programmeAttendanceHref(programme);
+        return;
+      }
+      if (courses.length === 1) {
+        closePicker();
+        window.location.href = courseAttendanceHref(programme, courses[0]);
+        return;
+      }
+      var title = document.getElementById("mobile-attendance-picker-title");
+      var subtitle = document.getElementById("mobile-attendance-picker-subtitle");
+      var list = document.getElementById("mobile-attendance-picker-list");
+      var backBtn = document.getElementById("mobile-attendance-picker-back");
+      if (title) title.textContent = "Choose class";
+      if (subtitle) subtitle.textContent = programmeAttendanceLabel(programme);
+      if (backBtn) backBtn.classList.toggle("hidden", !showBack);
+      list.innerHTML = courses
+        .map(function (course) {
+          return (
+            '<button type="button" data-attendance-pick="course" data-programme-index="' +
+            pickerState.programmeIndex +
+            '" data-course-id="' +
+            escapeHtml(course.id) +
+            '" class="mobile-attendance-picker-item w-full text-left px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-brand-50 hover:border-brand-200 transition">' +
+            '<span class="block text-sm font-bold font-mono text-brand-900">' +
+            escapeHtml(course.code) +
+            "</span>" +
+            '<span class="block text-xs text-slate-600 mt-0.5">' +
+            escapeHtml(course.name) +
+            "</span></button>"
+          );
+        })
+        .join("");
+      modal.classList.remove("hidden");
+    }
+
+    modal.addEventListener("click", function (event) {
+      if (event.target === modal) closePicker();
+    });
+    document.getElementById("mobile-attendance-picker-close").addEventListener("click", closePicker);
+    document.getElementById("mobile-attendance-picker-back").addEventListener("click", function () {
+      pickerState.programmeIndex = -1;
+      renderProgrammeStep();
+    });
+    function handleAttendancePickerTap(event) {
+      var pick = event.target.closest("[data-attendance-pick]");
+      if (!pick) return;
+      var kind = pick.getAttribute("data-attendance-pick");
+      if (kind === "programme") {
+        var idx = parseInt(pick.getAttribute("data-programme-index"), 10);
+        var programme = pickerState.programmes[idx];
+        if (!programme) return;
+        pickerState.programmeIndex = idx;
+        openCourseStep(programme, pickerState.programmes.length > 1);
+        return;
+      }
+      if (kind === "course") {
+        var pIdx = parseInt(pick.getAttribute("data-programme-index"), 10);
+        var courseId = pick.getAttribute("data-course-id") || "";
+        var prog = pickerState.programmes[pIdx];
+        if (!prog || !courseId) return;
+        var course = (Attendify.coursesForProgramme(prog.id) || []).filter(function (c) {
+          return c.id === courseId;
+        })[0];
+        if (!course) return;
+        closePicker();
+        window.location.href = courseAttendanceHref(prog, course);
+      }
+    }
+  var pickerListEl = document.getElementById("mobile-attendance-picker-list");
+  if (pickerListEl) {
+    pickerListEl.addEventListener("click", handleAttendancePickerTap);
+    pickerListEl.addEventListener(
+      "touchend",
+      function (event) {
+        if (!event.target.closest("[data-attendance-pick]")) return;
+        event.preventDefault();
+        handleAttendancePickerTap(event);
+      },
+      { passive: false }
+    );
+  }
+
+    window.AttendifyMobileAttendancePicker = {
+      open: function () {
+        if (!window.Attendify) return;
+        Attendify.ready().then(function () {
+          var programmes = Attendify.load().classes || [];
+          if (!programmes.length) {
+            window.alert("Create a programme on the dashboard first.");
+            return;
+          }
+          pickerState.programmes = programmes;
+          pickerState.programmeIndex = -1;
+          if (programmes.length > 1) {
+            renderProgrammeStep();
+            modal.classList.remove("hidden");
+            return;
+          }
+          openCourseStep(programmes[0], false);
+        });
+      },
+      close: closePicker
+    };
+  }
+
+  function startMobileAttendanceFlow() {
+    ensureMobileAttendancePickerModal();
+    if (window.AttendifyMobileAttendancePicker) AttendifyMobileAttendancePicker.open();
+  }
+
+  function bottomNavIcon(kind) {
+    var paths = {
+      dashboard:
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>',
+      attendance:
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>',
+      reports:
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>',
+      settings:
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>'
+    };
+    return (
+      '<svg class="faculty-bottom-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">' +
+      (paths[kind] || paths.dashboard) +
+      "</svg>"
+    );
+  }
+
+  function initMobileBottomNav() {
+    if (document.getElementById("faculty-bottom-nav")) return;
+    var active = currentBottomNavKey();
+    var items = [
+      { key: "dashboard", href: "dashboard.html", label: "Dashboard" },
+      { key: "attendance", href: attendanceNavHref(), label: "Attendance" },
+      { key: "reports", href: "reports.html", label: "Report" },
+      { key: "settings", href: "settings.html", label: "Settings" }
+    ];
+    var bar = document.createElement("nav");
+    bar.id = "faculty-bottom-nav";
+    bar.className = "faculty-bottom-nav";
+    bar.setAttribute("aria-label", "Main navigation");
+    bar.innerHTML = items
+      .map(function (item) {
+        var isActive = item.key === active;
+        return (
+          '<a href="' +
+          item.href +
+          '" data-bottom-nav="' +
+          item.key +
+          '" class="faculty-bottom-nav-item' +
+          (isActive ? " is-active" : "") +
+          '"' +
+          (isActive ? ' aria-current="page"' : "") +
+          ">" +
+          bottomNavIcon(item.key) +
+          '<span class="faculty-bottom-nav-label">' +
+          item.label +
+          "</span></a>"
+        );
+      })
+      .join("");
+    document.body.appendChild(bar);
+    document.body.classList.add("has-faculty-bottom-nav");
+
+    function onAttendanceNavTap(event) {
+      var attendanceLink = event.target.closest('[data-bottom-nav="attendance"]');
+      if (!attendanceLink) return;
+      event.preventDefault();
+      startMobileAttendanceFlow();
+    }
+    bar.addEventListener("click", onAttendanceNavTap);
+    bar.addEventListener("touchend", onAttendanceNavTap, { passive: false });
+
+    function refreshAttendanceLink() {
+      var link = bar.querySelector('[data-bottom-nav="attendance"]');
+      if (!link) return;
+      link.setAttribute("href", attendanceNavHref());
+      if (currentBottomNavKey() === "attendance") link.classList.add("is-active");
+    }
+
+    if (window.Attendify && Attendify.ready) {
+      Attendify.ready().then(refreshAttendanceLink);
+    }
+    window.addEventListener("attendify:programmes-updated", refreshAttendanceLink);
+    window.addEventListener("attendify:course-created", refreshAttendanceLink);
+  }
+
+  function facultyAppBarTitle() {
+    var nav = document.getElementById("faculty-nav");
+    var page = nav ? String(nav.getAttribute("data-page") || "") : "";
+    var map = {
+      dashboard: "Dashboard",
+      reports: "Report",
+      settings: "Settings",
+      courses: "Course",
+      programme: "Programme"
+    };
+    if (map[page]) return map[page];
+    var header = document.querySelector("main > header");
+    if (header) {
+      var p = header.querySelector(".faculty-topbar-desktop p.font-black, .faculty-topbar-desktop h1");
+      if (p && p.textContent) return String(p.textContent).trim();
+    }
+    return "Attendify";
+  }
+
+  function facultyBackHref() {
+    var nav = document.getElementById("faculty-nav");
+    var page = nav ? String(nav.getAttribute("data-page") || "") : "";
+    var params = new URLSearchParams(window.location.search);
+    if (page === "dashboard") return "";
+    if (page === "courses") {
+      var prog = params.get("programme") || params.get("class") || "";
+      if (prog) return "programme.html?programme=" + encodeURIComponent(prog);
+      return "dashboard.html";
+    }
+    if (page === "programme") return "dashboard.html";
+    return "dashboard.html";
+  }
+
+  function initFacultyAppBar(header) {
+    if (!header || header.dataset.facultyAppBar === "1") return;
+    header.dataset.facultyAppBar = "1";
+    header.classList.add("faculty-topbar");
+
+    var desktop = document.createElement("div");
+    desktop.className = "faculty-topbar-desktop w-full";
+    while (header.firstChild) desktop.appendChild(header.firstChild);
+    header.appendChild(desktop);
+
+    var navRoot = document.getElementById("faculty-nav");
+    var pageKey = navRoot ? String(navRoot.getAttribute("data-page") || "") : "";
+    var isDashboardHome = pageKey === "dashboard";
+    var backHref = facultyBackHref();
+    var titleText = isDashboardHome ? "" : facultyAppBarTitle();
+    var appBar = document.createElement("div");
+    appBar.className = "faculty-app-bar" + (isDashboardHome ? " faculty-app-bar--home" : "");
+    appBar.innerHTML =
+      (backHref
+        ? '<button type="button" id="btn-faculty-back" class="faculty-app-back" aria-label="Go back">' +
+          '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>'
+        : "") +
+      (titleText
+        ? '<p class="faculty-app-bar-title">' + escapeHtml(titleText) + "</p>"
+        : "") +
+      '<div class="faculty-app-bar-actions">' +
+      '<a href="settings.html" class="faculty-header-profile" id="faculty-header-profile" aria-label="Account and settings">' +
+      '<span id="faculty-header-avatar" class="faculty-header-avatar-slot"></span>' +
+      "</a>" +
+      '<button type="button" id="btn-sidebar-toggle" class="faculty-menu-dots" aria-expanded="false" aria-controls="faculty-sidebar" aria-label="Open menu">' +
+      menuDotsSvg +
+      "</button></div>";
+    header.insertBefore(appBar, desktop);
+
+    var backBtn = document.getElementById("btn-faculty-back");
+    if (backBtn && backHref) {
+      backBtn.addEventListener("click", function () {
+        window.location.href = backHref;
+      });
+    }
+  }
+
+  function ensureTabletSidebarToggle(desktopWrap) {
+    if (!desktopWrap || document.getElementById("btn-sidebar-toggle-tablet")) return;
+    if (document.getElementById("btn-sidebar-toggle")) return;
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "btn-sidebar-toggle-tablet";
+    btn.className = "faculty-sidebar-toggle faculty-sidebar-toggle--tablet";
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-controls", "faculty-sidebar");
+    btn.setAttribute("aria-label", "Open navigation menu");
+    btn.innerHTML =
+      '<svg class="faculty-sidebar-toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>' +
+      "</svg>";
+    desktopWrap.insertBefore(btn, desktopWrap.firstChild);
+    return btn;
+  }
+
   function initMobileSidebar(nav) {
     var aside = document.querySelector("body > aside");
     var main = document.querySelector("body > main");
@@ -383,7 +812,7 @@
 
     var header = main.querySelector("header");
     if (!header) return;
-    header.classList.add("faculty-topbar");
+    initFacultyAppBar(header);
 
     var backdrop = document.getElementById("faculty-sidebar-backdrop");
     if (!backdrop) {
@@ -396,33 +825,32 @@
 
     var btn = document.getElementById("btn-sidebar-toggle");
     if (!btn) {
-      btn = document.createElement("button");
-      btn.type = "button";
-      btn.id = "btn-sidebar-toggle";
-      btn.className = "faculty-sidebar-toggle";
-      btn.setAttribute("aria-expanded", "false");
-      btn.setAttribute("aria-controls", "faculty-sidebar");
-      btn.setAttribute("aria-label", "Open navigation menu");
-      btn.innerHTML =
-        '<svg class="faculty-sidebar-toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>' +
-        "</svg>";
-      header.insertBefore(btn, header.firstChild);
+      var desktopWrap = header.querySelector(".faculty-topbar-desktop");
+      btn = ensureTabletSidebarToggle(desktopWrap);
     }
+    if (!btn) return;
+
+    var tabletBtn = document.getElementById("btn-sidebar-toggle-tablet");
 
     function setSidebarOpen(open) {
       var on = !!open;
       document.body.classList.toggle("faculty-sidebar-open", on);
       backdrop.hidden = !on;
-      btn.setAttribute("aria-expanded", on ? "true" : "false");
-      btn.setAttribute("aria-label", on ? "Close navigation menu" : "Open navigation menu");
+      [btn, tabletBtn].forEach(function (toggle) {
+        if (!toggle) return;
+        toggle.setAttribute("aria-expanded", on ? "true" : "false");
+        toggle.setAttribute("aria-label", on ? "Close navigation menu" : "Open menu");
+      });
       document.body.style.overflow = on ? "hidden" : "";
     }
 
-    if (!btn.dataset.boundMobile) {
-      btn.dataset.boundMobile = "1";
-      btn.addEventListener("click", function () {
-        setSidebarOpen(!document.body.classList.contains("faculty-sidebar-open"));
+    if (!header.dataset.sidebarBound) {
+      header.dataset.sidebarBound = "1";
+      [btn, tabletBtn].forEach(function (toggle) {
+        if (!toggle) return;
+        toggle.addEventListener("click", function () {
+          setSidebarOpen(!document.body.classList.contains("faculty-sidebar-open"));
+        });
       });
       backdrop.addEventListener("click", function () {
         setSidebarOpen(false);
@@ -449,15 +877,17 @@
     var nav = document.getElementById("faculty-nav");
     if (!nav) return;
     initMobileSidebar(nav);
+    initMobileBottomNav();
     renderShell(nav);
     bindNav(nav);
     ensureCreateCourseModal();
+    ensureMobileAttendancePickerModal();
     if (!window.Attendify) return;
     Attendify.ready().then(function () {
       renderClassList(nav);
       var session = Attendify.getSession && Attendify.getSession();
       if (session && session.lecturer && Attendify.paintLecturerChrome) {
-        Attendify.paintLecturerChrome(session.lecturer, { sidebar: true });
+        Attendify.paintLecturerChrome(session.lecturer, { sidebar: true, header: true });
       }
     });
     document.querySelectorAll("#btn-logout").forEach(function (logoutBtn) {

@@ -33,7 +33,7 @@
     var person = Attendify.lecturerAvatarPerson(lecturerForDisplay());
     host.innerHTML = Attendify.avatarMarkup(person, "w-full h-full", "ring-0");
     Attendify.hydrateAvatars(host);
-    Attendify.paintLecturerChrome(lecturerForDisplay(), { sidebar: true });
+    Attendify.paintLecturerChrome(lecturerForDisplay(), { sidebar: true, header: true });
   }
 
   function fillView(lecturer) {

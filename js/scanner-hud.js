@@ -197,24 +197,31 @@
     }
     list.innerHTML = rows
       .map(function (row) {
+        var removeBtn =
+          '<button type="button" data-action="remove-scan" data-student-id="' +
+          esc(row.student.id) +
+          '" class="w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-lg leading-none shrink-0 scan-present-remove" title="Remove">×</button>';
+        var card =
+          global.AttendifyStudentList && AttendifyStudentList.attendanceSessionRosterCard
+            ? global.AttendifyStudentList.attendanceSessionRosterCard(row.student, "present", row.scannedAt, {
+                ring: "ring-2 ring-white",
+                removeButtonHtml: removeBtn
+              })
+            : "";
+        if (!card) {
+          card =
+            '<div class="attendance-session-card attendance-session-card--roster">' +
+            avatarHtml(row.student, "w-11 h-11", "ring-2 ring-white") +
+            '<div class="min-w-0 flex-1"><p class="font-semibold text-slate-900 text-sm truncate">' +
+            esc(row.student.name) +
+            "</p></div></div>";
+        }
         return (
           '<div class="scan-present-card" data-student-id="' +
           esc(row.student.id) +
           '">' +
-          avatarHtml(row.student, "w-10 h-10", "ring-2 ring-white") +
-          '<div class="flex-1 min-w-0">' +
-          '<p class="font-semibold text-slate-900 text-sm truncate">' +
-          esc(row.student.name) +
-          "</p>" +
-          '<p class="text-[11px] text-slate-500 font-mono truncate">' +
-          esc(row.student.index) +
-          " · " +
-          esc(global.Attendify.formatTime(row.scannedAt)) +
-          "</p></div>" +
-          '<span class="text-[10px] font-bold uppercase text-teal-700 bg-teal-50 px-2 py-1 rounded-lg shrink-0 scan-present-badge">Present</span>' +
-          '<button type="button" data-action="remove-scan" data-student-id="' +
-          esc(row.student.id) +
-          '" class="w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-lg leading-none shrink-0 scan-present-remove" title="Remove">×</button></div>'
+          card +
+          "</div>"
         );
       })
       .join("");

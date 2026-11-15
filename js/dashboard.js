@@ -900,13 +900,13 @@ function buildClassCardMarkup(course, index) {
       '<div class="flex items-center justify-end -mt-1">' +
         '<div id="' + prefix + '-rate" class="text-sm font-black ' + rateColor + ' tabular-nums leading-none" title="Today\u2019s turnout">Today: <span class="text-base">\u2014</span></div>' +
       "</div>" +
-      '<dl class="grid grid-cols-4 gap-0.5 border-t border-slate-100 pt-1.5 text-[10px] sm:text-[11px] leading-tight">' +
+      '<dl class="dashboard-prog-card-stats grid grid-cols-4 gap-0.5 border-t border-slate-100 pt-1.5 text-[10px] sm:text-[11px] leading-tight">' +
         '<div><dt class="text-slate-400 font-medium">Enrolled</dt><dd id="' + prefix + '-enrolled" class="font-bold text-slate-800 text-xs sm:text-sm mt-0.5">0</dd></div>' +
         '<div><dt class="text-slate-400 font-medium">Courses</dt><dd id="' + prefix + '-course-count" class="font-bold text-brand-700 text-xs sm:text-sm tabular-nums mt-0.5">0</dd></div>' +
         '<div><dt class="text-slate-400 font-medium" title="See each course in the list">Sessions</dt><dd id="' + prefix + '-sessions" class="font-bold text-slate-400 text-xs sm:text-sm mt-0.5">—</dd></div>' +
         '<div><dt class="text-slate-400 font-medium" title="Attendance taken per course below">Taken</dt><dd id="' + prefix + '-attendance" class="font-bold text-slate-400 text-xs sm:text-sm tabular-nums mt-0.5">—</dd></div>' +
       "</dl>" +
-      '<div class="flex items-center gap-1.5">' +
+      '<div class="dashboard-prog-card-actions flex items-center gap-1.5">' +
         '<button type="button" data-action="scan" data-class-id="' +
         esc(course.id) +
         '"' +
@@ -938,9 +938,24 @@ function renderClassCards() {
   });
 }
 
+function dashboardGreetingName(lecturer) {
+  if (!lecturer) return "";
+  var raw = lecturer.fullName || lecturer.username || "";
+  var first = String(raw).trim().split(/\s+/)[0];
+  return first || "";
+}
+
 function renderDashboard() {
   var stats = Attendify.dashboardStats();
   var state = Attendify.load();
+  var heroTitle = document.getElementById("dashboard-hero-title");
+  var progCount = document.getElementById("dashboard-programme-count");
+  if (progCount) progCount.textContent = String((state.classes || []).length);
+  if (heroTitle) {
+    var session = Attendify.getSession && Attendify.getSession();
+    var first = session && session.lecturer ? dashboardGreetingName(session.lecturer) : "";
+    heroTitle.textContent = first ? "Hi, " + first : "Lecturer dashboard";
+  }
   document.getElementById("stat-students").textContent = String(stats.totalStudents);
   document.getElementById("stat-classes").textContent = String(stats.totalClasses);
   document.getElementById("stat-class-list").textContent =
@@ -961,7 +976,7 @@ var params = new URLSearchParams(window.location.search);
 
 function applyLecturerChrome(session) {
   if (!session || !session.lecturer) return;
-  Attendify.paintLecturerChrome(session.lecturer, { sidebar: true });
+  Attendify.paintLecturerChrome(session.lecturer, { sidebar: true, header: true });
 }
 
 function promptCreateFirstCourse(classId) {

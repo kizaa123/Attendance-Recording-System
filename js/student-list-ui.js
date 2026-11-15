@@ -32,10 +32,18 @@
     if (options.email && student.email) parts.push(student.email);
     if (options.extra) parts.push(options.extra);
     var meta = metaLine(parts);
+    var sessionCard = !!options.sessionCard;
+    var identityCls =
+      "student-list-identity flex items-center min-w-0" + (sessionCard ? " student-session-identity" : " gap-3");
+    var textCls = "min-w-0 flex-1" + (sessionCard ? " student-session-identity-text" : "");
     return (
-      '<div class="student-list-identity flex items-center gap-3 min-w-0">' +
+      '<div class="' +
+      identityCls +
+      '">' +
       global.Attendify.avatarMarkup(student, avatarSize, ring) +
-      '<div class="min-w-0 flex-1">' +
+      '<div class="' +
+      textCls +
+      '">' +
       '<p class="student-list-name font-semibold text-slate-900 text-sm truncate">' +
       esc(student.name) +
       "</p>" +
@@ -46,12 +54,82 @@
     );
   }
 
+  var sessionBadgeGlyphs = {
+    present:
+      '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10" fill="#22c55e"/><path d="M6.25 10.15l2.35 2.35 5.15-5.5" stroke="#fff" stroke-width="1.65" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    waiting:
+      '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10" fill="#f59e0b"/><circle cx="10" cy="10" r="4.25" stroke="#fff" stroke-width="1.5" fill="none"/><path d="M10 6.2V10l2.4 1.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    absent:
+      '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10" fill="#f43f5e"/><path d="M7 7l6 6M13 7l-6 6" stroke="#fff" stroke-width="1.65" stroke-linecap="round"/></svg>'
+  };
+
+  function studentIndexValue(student) {
+    if (!student) return "";
+    var idx = student.index != null ? student.index : student.studentIndex;
+    return idx != null && String(idx).trim() !== "" ? String(idx).trim() : "";
+  }
+
+  function attendanceSessionRosterCard(student, badgeKind, scannedAt, options) {
+    options = options || {};
+    if (!global.Attendify || !student) return "";
+    var indexVal = studentIndexValue(student);
+    var timeStr = scannedAt ? global.Attendify.formatTime(scannedAt) : "";
+    var ring = options.ring != null ? options.ring : "ring-2 ring-white";
+    var badge = attendanceSessionBadge(badgeKind);
+    var removeBtn = options.removeButtonHtml || "";
+    var metaIndex = indexVal
+      ? '<p class="student-list-meta student-list-meta-index font-mono text-slate-500 truncate">' + esc(indexVal) + "</p>"
+      : "";
+    var metaTime = timeStr
+      ? '<p class="student-list-meta student-list-meta-time font-mono text-slate-400 tabular-nums truncate">' +
+        esc(timeStr) +
+        "</p>"
+      : "";
+    return (
+      '<div class="attendance-session-card attendance-session-card--roster">' +
+      global.Attendify.avatarMarkup(student, "w-10 h-10", ring) +
+      '<div class="attendance-session-card__main student-session-identity-text">' +
+      '<p class="student-list-name font-semibold text-slate-900 text-sm leading-tight truncate">' +
+      esc(student.name) +
+      "</p>" +
+      (metaIndex || metaTime
+        ? '<div class="attendance-session-card__meta">' + metaIndex + metaTime + "</div>"
+        : "") +
+      "</div>" +
+      badge +
+      removeBtn +
+      "</div>"
+    );
+  }
+
+  function attendanceSessionBadge(kind) {
+    var labels = { present: "Present", waiting: "Waiting...", absent: "Absent" };
+    var key = labels[kind] ? kind : "";
+    if (!key) {
+      return '<span class="attendance-session-badge attendance-session-badge--neutral" role="status">—</span>';
+    }
+    return (
+      '<span class="attendance-session-badge attendance-session-badge--' +
+      key +
+      '" role="status">' +
+      '<span class="attendance-session-badge__glyph">' +
+      sessionBadgeGlyphs[key] +
+      "</span>" +
+      '<span class="attendance-session-badge__text">' +
+      esc(labels[key]) +
+      "</span></span>"
+    );
+  }
+
   var menuDotsSvg =
     '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="12" cy="19" r="1.75"/></svg>';
 
   global.AttendifyStudentList = {
     esc: esc,
     identityHtml: identityHtml,
-    menuDotsSvg: menuDotsSvg
+    menuDotsSvg: menuDotsSvg,
+    attendanceSessionBadge: attendanceSessionBadge,
+    attendanceSessionRosterCard: attendanceSessionRosterCard,
+    studentIndexValue: studentIndexValue
   };
 })(window);

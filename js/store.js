@@ -480,6 +480,17 @@
       avatarEl.innerHTML = avatarMarkup(lecturerAvatarPerson(lecturer), size, ring);
       hydrateAvatars(avatarEl);
     }
+    if (opts.header) {
+      var headerAvatar = document.getElementById("faculty-header-avatar");
+      if (headerAvatar) {
+        headerAvatar.innerHTML = avatarMarkup(
+          lecturerAvatarPerson(lecturer),
+          "w-full h-full",
+          "ring-2 ring-tealAccent-300/50"
+        );
+        hydrateAvatars(headerAvatar);
+      }
+    }
   }
 
   function formatStudentLevel(studentOrLevel) {
@@ -494,6 +505,10 @@
   function printAttendanceReport(meta) {
     meta = meta || {};
     var rows = meta.rows || [];
+    if (!rows.length) {
+      window.alert("No rows to export.");
+      return;
+    }
     var bodyRows = rows
       .map(function (row) {
         return (
@@ -511,12 +526,25 @@
         );
       })
       .join("");
+    var title = htmlText(meta.title || "Attendance");
     var html =
-      "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>" +
-      htmlText(meta.title || "Attendance") +
-      "</title><style>body{font-family:system-ui,sans-serif;padding:24px;color:#0f172a}h1{font-size:20px;margin:0 0 4px}p{margin:0 0 16px;color:#475569;font-size:13px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #e2e8f0;padding:8px 10px;text-align:left}th{background:#f8fafc;text-transform:uppercase;font-size:10px;letter-spacing:.04em}td:nth-child(2){font-family:ui-monospace,monospace}</style></head><body>" +
+      "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
+      "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+      "<title>" +
+      title +
+      "</title><style>" +
+      "*,*::before,*::after{box-sizing:border-box}" +
+      "body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:16px;color:#0f172a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+      "h1{font-size:18px;margin:0 0 6px;line-height:1.25}" +
+      "p{margin:0 0 14px;color:#475569;font-size:12px;line-height:1.4}" +
+      "table{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}" +
+      "th,td{border:1px solid #e2e8f0;padding:6px 8px;text-align:left;vertical-align:top;word-wrap:break-word}" +
+      "th{background:#f8fafc;text-transform:uppercase;font-size:9px;letter-spacing:.04em}" +
+      "td:nth-child(2){font-family:ui-monospace,monospace;font-size:10px}" +
+      "@media print{body{padding:12px}table{font-size:10px}}" +
+      "</style></head><body>" +
       "<h1>" +
-      htmlText(meta.title || "Attendance") +
+      title +
       "</h1>" +
       "<p>" +
       htmlText(meta.subtitle || "") +
@@ -524,17 +552,82 @@
       "<table><thead><tr><th>Student name</th><th>Index no.</th><th>Level</th><th>Status</th><th>Time</th></tr></thead><tbody>" +
       bodyRows +
       "</tbody></table></body></html>";
-    var win = window.open("", "_blank");
-    if (!win) {
-      window.alert("Allow pop-ups to export PDF, then use Print → Save as PDF.");
-      return;
+
+    function printFromFrame(frame) {
+      var printWin = frame.contentWindow;
+      if (!printWin || !printWin.document) return false;
+      var doc = printWin.document;
+      doc.open();
+      doc.write(html);
+      doc.close();
+      var delay = window.matchMedia("(max-width: 767px)").matches ? 450 : 300;
+      var done = false;
+      function triggerPrint() {
+        if (done) return;
+        done = true;
+        try {
+          printWin.focus();
+          printWin.print();
+        } catch (_) {}
+        setTimeout(function () {
+          frame.style.cssText = "position:fixed;left:-9999px;top:0;width:0;height:0;border:0;visibility:hidden";
+        }, 1200);
+      }
+      if (printWin.document.readyState === "complete") {
+        setTimeout(triggerPrint, delay);
+      } else {
+        frame.onload = function () {
+          setTimeout(triggerPrint, delay);
+        };
+        setTimeout(triggerPrint, delay + 400);
+      }
+      return true;
     }
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(function () {
-      win.print();
-    }, 350);
+
+    function printFromBlobUrl() {
+      var blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var win = window.open(url, "_blank");
+      if (!win) {
+        URL.revokeObjectURL(url);
+        return false;
+      }
+      var delay = window.matchMedia("(max-width: 767px)").matches ? 700 : 400;
+      var fired = false;
+      function go() {
+        if (fired) return;
+        fired = true;
+        try {
+          win.focus();
+          win.print();
+        } catch (_) {}
+        setTimeout(function () {
+          URL.revokeObjectURL(url);
+        }, 60000);
+      }
+      win.addEventListener("load", function () {
+        setTimeout(go, delay);
+      });
+      setTimeout(go, delay + 500);
+      return true;
+    }
+
+    var frame = document.getElementById("attendify-print-frame");
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.id = "attendify-print-frame";
+      frame.setAttribute("title", "Print attendance");
+      frame.setAttribute("aria-hidden", "true");
+      document.body.appendChild(frame);
+    }
+    frame.style.cssText =
+      "position:fixed;inset:0;width:100%;height:100%;border:0;z-index:2147483646;background:#fff";
+
+    if (printFromFrame(frame)) return;
+
+    if (printFromBlobUrl()) return;
+
+    window.alert("Could not open the print view. Allow pop-ups, or use Export CSV.");
   }
 
   function addStudent(input) {
@@ -1535,7 +1628,17 @@
     var token = session && session.token ? session.token : "";
     clearSession();
     function go() {
-      window.location.replace("login.html");
+      var href = "login.html";
+      if (
+        window.AttendifyAuthEntry &&
+        AttendifyAuthEntry.isMobileAuth &&
+        AttendifyAuthEntry.isMobileAuth()
+      ) {
+        href = AttendifyAuthEntry.mobileSplashHref("");
+      } else if (window.matchMedia("(max-width: 1023px)").matches) {
+        href = "splash.html";
+      }
+      window.location.replace(href);
     }
     fetch(apiUrl("/api/auth/logout"), {
       method: "POST",

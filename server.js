@@ -154,8 +154,7 @@ function isFacultyHtmlPage(pathname) {
     name === "course.html" ||
     name === "programme.html" ||
     name === "reports.html" ||
-    name === "settings.html" ||
-    name === "index.html"
+    name === "settings.html"
   );
 }
 
@@ -494,7 +493,7 @@ function handleRequest(req, res) {
   }
 
   let rel = decodeURIComponent(url.pathname);
-  if (rel === "/") rel = "/login.html";
+  if (rel === "/") rel = "/index.html";
 
   const joinMatch = rel.match(/^\/join\/([^/]+)\/?$/i);
   if (joinMatch) {
@@ -508,7 +507,7 @@ function handleRequest(req, res) {
   if (isFacultyHtmlPage(rel)) {
     const pageAuth = db.validateLecturerSession(readAuthToken(req));
     if (!pageAuth.ok) {
-      const nextPage = rel === "/index.html" ? "dashboard.html" : rel.replace(/^\//, "");
+      const nextPage = rel.replace(/^\//, "");
       const next = encodeURIComponent(nextPage + (url.search || ""));
       res.writeHead(302, {
         Location: "/login.html?next=" + next,

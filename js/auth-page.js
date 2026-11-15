@@ -83,6 +83,8 @@
     viewport.addEventListener(
       "touchend",
       function (e) {
+        if (document.body.classList.contains("auth-programme-sheet-open")) return;
+        if (e.target && e.target.closest && e.target.closest(".auth-programme-combo")) return;
         if (!e.changedTouches || !e.changedTouches[0]) return;
         var dx = e.changedTouches[0].clientX - touchStartX;
         var dy = e.changedTouches[0].clientY - touchStartY;
@@ -206,7 +208,7 @@
         programmeId: selectedProgram || undefined
       }).then(function (result) {
         if (submitBtn) submitBtn.disabled = false;
-        if (submitText) submitText.innerHTML = "Sign In &rarr;";
+        if (submitText) submitText.textContent = "Sign In";
         if (!result.ok) {
           showLoginError(result.error || "Could not sign in.");
           return;
@@ -267,6 +269,38 @@
   var signupProgSearch = document.getElementById("signup-programme-search");
   var signupProgValue = document.getElementById("signup-programme");
   var signupProgList = document.getElementById("signup-programme-list");
+  var signupProgBackdrop = null;
+  var signupProgMobileSheet = null;
+  var signupProgPanelAnchor = { parent: null, next: null };
+
+  function isMobileAuthPicker() {
+    return window.matchMedia("(max-width: 1023px)").matches;
+  }
+
+  function mountSignupProgrammeMobileSheet() {
+    if (signupProgMobileSheet) return;
+    signupProgBackdrop = document.createElement("div");
+    signupProgBackdrop.className = "auth-programme-backdrop";
+    signupProgBackdrop.setAttribute("hidden", "");
+    signupProgBackdrop.addEventListener("click", function () {
+      setSignupProgrammeOpen(false);
+    });
+    signupProgMobileSheet = document.createElement("div");
+    signupProgMobileSheet.className = "auth-programme-mobile-sheet";
+    signupProgMobileSheet.setAttribute("hidden", "");
+    signupProgMobileSheet.innerHTML =
+      '<div class="auth-programme-mobile-sheet-inner" role="dialog" aria-modal="true" aria-label="Choose programme">' +
+      '<div class="auth-programme-sheet-grab" aria-hidden="true"></div>' +
+      '<p class="auth-programme-sheet-title">UCC programme</p>' +
+      '<div class="auth-programme-mobile-sheet-slot"></div></div>';
+    document.body.appendChild(signupProgBackdrop);
+    document.body.appendChild(signupProgMobileSheet);
+  }
+
+  function restoreSignupProgrammePanel() {
+    if (!signupProgPanel || !signupProgPanelAnchor.parent) return;
+    signupProgPanelAnchor.parent.insertBefore(signupProgPanel, signupProgPanelAnchor.next);
+  }
   var signupLevelSelect = document.getElementById("signup-level");
   var signupRosterWrap = document.getElementById("signup-roster-wrap");
   var signupRosterHeading = document.getElementById("signup-roster-heading");
@@ -303,8 +337,34 @@
     if (!signupProgCombo || !signupProgPanel || !signupProgTrigger) return;
     var on = !!open;
     signupProgCombo.classList.toggle("is-open", on);
-    signupProgPanel.hidden = !on;
     signupProgTrigger.setAttribute("aria-expanded", on ? "true" : "false");
+
+    if (isMobileAuthPicker()) {
+      mountSignupProgrammeMobileSheet();
+      var slot = signupProgMobileSheet.querySelector(".auth-programme-mobile-sheet-slot");
+      if (on) {
+        if (!signupProgPanelAnchor.parent && signupProgPanel.parentNode) {
+          signupProgPanelAnchor.parent = signupProgPanel.parentNode;
+          signupProgPanelAnchor.next = signupProgPanel.nextSibling;
+        }
+        slot.appendChild(signupProgPanel);
+        signupProgPanel.classList.add("auth-programme-panel--mobile-sheet");
+        signupProgPanel.hidden = false;
+        signupProgBackdrop.removeAttribute("hidden");
+        signupProgMobileSheet.removeAttribute("hidden");
+        document.body.classList.add("auth-programme-sheet-open");
+      } else {
+        restoreSignupProgrammePanel();
+        signupProgPanel.classList.remove("auth-programme-panel--mobile-sheet");
+        signupProgPanel.hidden = true;
+        signupProgBackdrop.setAttribute("hidden", "");
+        signupProgMobileSheet.setAttribute("hidden", "");
+        document.body.classList.remove("auth-programme-sheet-open");
+      }
+    } else {
+      signupProgPanel.hidden = !on;
+    }
+
     if (on) {
       renderSignupProgrammeList(
         filterSignupProgrammes(signupProgSearch ? signupProgSearch.value : ""),
@@ -313,7 +373,7 @@
       if (signupProgSearch) {
         window.setTimeout(function () {
           signupProgSearch.focus();
-        }, 0);
+        }, isMobileAuthPicker() ? 120 : 0);
       }
     }
     if (!on && signupProgSearch) signupProgSearch.value = "";
@@ -499,7 +559,8 @@
   }
 
   if (signupProgTrigger) {
-    signupProgTrigger.addEventListener("click", function () {
+    signupProgTrigger.addEventListener("click", function (e) {
+      e.stopPropagation();
       var open = signupProgCombo && signupProgCombo.classList.contains("is-open");
       setSignupProgrammeOpen(!open);
     });
@@ -507,6 +568,7 @@
   document.addEventListener("click", function (e) {
     if (!signupProgCombo || !signupProgCombo.classList.contains("is-open")) return;
     if (signupProgCombo.contains(e.target)) return;
+    if (signupProgMobileSheet && signupProgMobileSheet.contains(e.target)) return;
     setSignupProgrammeOpen(false);
   });
   if (signupProgSearch) {
@@ -517,13 +579,24 @@
       e.stopPropagation();
     });
   }
+  function onSignupProgrammeOptionPick(e) {
+    var btn = e.target.closest("[data-programme-id]");
+    if (!btn) return;
+    e.stopPropagation();
+    pickSignupProgramme(btn.getAttribute("data-programme-id"));
+  }
   if (signupProgList) {
-    signupProgList.addEventListener("click", function (e) {
-      var btn = e.target.closest("[data-programme-id]");
-      if (!btn) return;
-      e.stopPropagation();
-      pickSignupProgramme(btn.getAttribute("data-programme-id"));
-    });
+    signupProgList.addEventListener("click", onSignupProgrammeOptionPick);
+    signupProgList.addEventListener(
+      "touchend",
+      function (e) {
+        var btn = e.target.closest("[data-programme-id]");
+        if (!btn) return;
+        e.preventDefault();
+        onSignupProgrammeOptionPick(e);
+      },
+      { passive: false }
+    );
   }
   if (signupLevelSelect) {
     signupLevelSelect.addEventListener("change", refreshSignupRosterPreview);

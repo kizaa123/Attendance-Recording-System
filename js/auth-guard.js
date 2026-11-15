@@ -3,8 +3,17 @@
  * Include after store.js on dashboard, course, programme, and reports.
  */
 (function () {
+  function loginRedirect(extra) {
+    extra = extra || "";
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      window.location.replace("splash.html" + extra);
+      return;
+    }
+    window.location.replace("login.html" + extra);
+  }
+
   if (!window.Attendify || typeof Attendify.validateSession !== "function") {
-    window.location.replace("login.html");
+    loginRedirect();
     return;
   }
 
@@ -15,7 +24,7 @@
     try {
       Attendify.clearSession();
     } catch (_) {}
-    window.location.replace("login.html?next=" + next);
+    loginRedirect("?next=" + next);
   }
 
   // Local session is a fast path; cookie-backed /api/auth/me is the source of truth.
