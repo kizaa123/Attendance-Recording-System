@@ -16,12 +16,6 @@
 
   function apiUrl(path) {
     if (window.location.protocol === "file:") return API_BASE + path;
-    var host = window.location.hostname;
-    var port = window.location.port;
-    if (isLoopbackHost(host)) {
-      if (!port || port === DEFAULT_PORT) return path;
-      return API_BASE + path;
-    }
     return path;
   }
 
@@ -1610,10 +1604,13 @@
   }
 
   function signupLecturer(payload) {
+    payload = payload || {};
+    var body = Object.assign({}, payload);
+    if (body.username != null) body.username = String(body.username).trim().toLowerCase();
     return fetch(apiUrl("/api/auth/signup"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload || {}),
+      body: JSON.stringify(body),
       credentials: "same-origin"
     })
       .then(function (response) {
@@ -1630,10 +1627,16 @@
   }
 
   function loginLecturer(payload) {
+    payload = payload || {};
+    var body = {
+      username: String(payload.username || "").trim().toLowerCase(),
+      password: String(payload.password || "")
+    };
+    if (payload.programmeId) body.programmeId = payload.programmeId;
     return fetch(apiUrl("/api/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload || {}),
+      body: JSON.stringify(body),
       credentials: "same-origin"
     })
       .then(function (response) {

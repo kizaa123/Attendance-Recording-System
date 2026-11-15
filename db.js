@@ -1319,9 +1319,13 @@ function updateLecturerProfile(input) {
 
 function loginLecturer(input) {
   openDb();
-  const username = String((input && input.username) || "").trim().toLowerCase();
+  const usernameCheck = validateLecturerUsername((input && input.username) || "");
+  if (!usernameCheck.ok) {
+    return { ok: false, error: "Enter your username and password." };
+  }
+  const username = usernameCheck.username;
   const password = String((input && input.password) || "");
-  if (!username || !password) {
+  if (!password) {
     return { ok: false, error: "Enter your username and password." };
   }
 

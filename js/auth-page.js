@@ -184,11 +184,11 @@
     loginForm.addEventListener("submit", function (e) {
       e.preventDefault();
       hideLoginError();
-      var username = usernameInput ? usernameInput.value.trim() : "";
+      var username = usernameInput ? String(usernameInput.value || "").trim().toLowerCase() : "";
       var password = passwordInput ? passwordInput.value : "";
       var selectedProgram = programmeSelect ? programmeSelect.value : "";
       if (!username) {
-        showLoginError("Please enter your email or staff username.");
+        showLoginError("Please enter your username.");
         return;
       }
       if (!password) {
@@ -625,7 +625,7 @@
     signupForm.addEventListener("submit", function (event) {
       event.preventDefault();
       hideSignupError();
-      var username = document.getElementById("signup-username").value.trim();
+      var username = String(document.getElementById("signup-username").value || "").trim().toLowerCase();
       var password = document.getElementById("signup-password").value;
       var fullName = document.getElementById("signup-name").value.trim();
 
