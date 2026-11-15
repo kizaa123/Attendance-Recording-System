@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/auth.css?v=36">
+  <link rel="stylesheet" href="css/auth.css?v=37">
 </head>
 <body class="auth-splash-page h-full antialiased font-sans">
   <div id="auth-splash" class="auth-splash auth-splash--standalone" role="dialog" aria-modal="true" aria-labelledby="auth-splash-title" aria-busy="true">
@@ -40,10 +40,14 @@
         <div class="auth-splash__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Loading">
           <span class="auth-splash__bar-fill"></span>
         </div>
+        <div class="auth-splash__loading-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
       </div>
     </div>
   </div>
-  <script src="js/auth-entry.js?v=1"></script>
-  <script src="js/auth-splash.js?v=3"></script>
+  <script src="js/page-transitions.js?v=1"></script>
+  <script src="js/auth-entry.js?v=2"></script>
+  <script src="js/auth-splash.js?v=5"></script>
 </body>
 </html>

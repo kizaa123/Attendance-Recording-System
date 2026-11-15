@@ -98,6 +98,58 @@ body {
   display: none;
 }
 
+/* —— Page enter (mobile app) —— */
+@media (max-width: 1023px) {
+  body.faculty-page-enter main {
+    animation: faculty-shell-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  body.faculty-page-enter .faculty-bottom-nav {
+    animation: faculty-shell-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  }
+
+  body.faculty-page-enter .faculty-topbar {
+    animation: faculty-shell-fade 0.45s ease-out both;
+  }
+}
+
+@keyframes faculty-shell-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes faculty-shell-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+body.faculty-content-pending main .flex-1 {
+  opacity: 0.55;
+  transition: opacity 0.25s ease;
+}
+
+body.faculty-content-ready main .flex-1 {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.faculty-page-enter main,
+  body.faculty-page-enter .faculty-bottom-nav,
+  body.faculty-page-enter .faculty-topbar {
+    animation: none;
+  }
+}
+
 /* —— Mobile app shell: bottom navigation (phones) —— */
 .faculty-bottom-nav {
   display: none;

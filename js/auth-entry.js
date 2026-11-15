@@ -10,8 +10,12 @@
 
   function loginAfterSplashHref() {
     var params = new URLSearchParams(win.location.search || "");
+    var wantSignup = params.get("mode") === "signup";
     params.delete("splash");
     params.set("from", "splash");
+    if (!wantSignup) {
+      params.delete("mode");
+    }
     var qs = params.toString();
     return "login.html" + (qs ? "?" + qs : "?from=splash");
   }
@@ -20,12 +24,19 @@
     if (!isMobileAuth()) return;
     var params = new URLSearchParams(win.location.search || "");
     if (params.get("from") === "splash") {
+      var openedSignup = params.get("mode") === "signup";
       params.delete("from");
       params.delete("splash");
+      if (!openedSignup) {
+        params.delete("mode");
+      }
       var clean = params.toString();
       try {
         win.history.replaceState(null, "", "login.html" + (clean ? "?" + clean : ""));
       } catch (e) {}
+      try {
+        sessionStorage.setItem("attendify_auth_mode", openedSignup ? "signup" : "signin");
+      } catch (e2) {}
       return;
     }
     if (params.get("splash") === "1") {

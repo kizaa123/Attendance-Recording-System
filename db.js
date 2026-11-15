@@ -125,6 +125,31 @@ function initSchema() {
 }
 
 function migrateSchemaUpgrades() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS lecturers (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      password_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      full_name TEXT NOT NULL DEFAULT '',
+      photo TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS lecturer_programmes (
+      lecturer_id TEXT NOT NULL REFERENCES lecturers(id) ON DELETE CASCADE,
+      class_id TEXT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+      level INTEGER NOT NULL DEFAULT 100,
+      PRIMARY KEY (lecturer_id, class_id, level)
+    );
+    CREATE TABLE IF NOT EXISTS lecturer_sessions (
+      token TEXT PRIMARY KEY,
+      lecturer_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_lecturer_sessions_lecturer ON lecturer_sessions(lecturer_id);
+  `);
+
   const cols = db.prepare("PRAGMA table_info(classes)").all().map(function (c) {
     return c.name;
   });
@@ -222,28 +247,7 @@ function migrateSchemaUpgrades() {
     db.exec("ALTER TABLE attendance_sessions ADD COLUMN closed_at TEXT");
   }
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS lecturers (
-      id TEXT PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE COLLATE NOCASE,
-      password_hash TEXT NOT NULL,
-      salt TEXT NOT NULL,
-      full_name TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS lecturer_programmes (
-      lecturer_id TEXT NOT NULL REFERENCES lecturers(id) ON DELETE CASCADE,
-      class_id TEXT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
-      PRIMARY KEY (lecturer_id, class_id)
-    );
-    CREATE TABLE IF NOT EXISTS lecturer_sessions (
-      token TEXT PRIMARY KEY,
-      lecturer_id TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_lecturer_sessions_lecturer ON lecturer_sessions(lecturer_id);
-  `);
+  ensureLecturerSchemaColumns();
 
   const courseCols = db.prepare("PRAGMA table_info(programme_courses)").all().map(function (c) {
     return c.name;
@@ -266,6 +270,37 @@ function migrateSchemaUpgrades() {
   }
 
   migrateAttendanceSessionsMultiPerDay();
+  ensureLecturerSchemaColumns();
+}
+
+function ensureLecturerSchemaColumns() {
+  const lecturerCols = db.prepare("PRAGMA table_info(lecturers)").all().map(function (c) {
+    return c.name;
+  });
+  if (lecturerCols.length && lecturerCols.indexOf("photo") === -1) {
+    db.exec("ALTER TABLE lecturers ADD COLUMN photo TEXT NOT NULL DEFAULT ''");
+  }
+
+  const lpCols = db
+    .prepare("PRAGMA table_info(lecturer_programmes)")
+    .all()
+    .map(function (c) {
+      return c.name;
+    });
+  if (lpCols.length && lpCols.indexOf("level") === -1) {
+    db.exec(`
+      CREATE TABLE lecturer_programmes_new (
+        lecturer_id TEXT NOT NULL REFERENCES lecturers(id) ON DELETE CASCADE,
+        class_id TEXT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        level INTEGER NOT NULL DEFAULT 100,
+        PRIMARY KEY (lecturer_id, class_id, level)
+      );
+      INSERT INTO lecturer_programmes_new (lecturer_id, class_id, level)
+        SELECT lecturer_id, class_id, 100 FROM lecturer_programmes;
+      DROP TABLE lecturer_programmes;
+      ALTER TABLE lecturer_programmes_new RENAME TO lecturer_programmes;
+    `);
+  }
 }
 
 function migrateAttendanceSessionsMultiPerDay() {

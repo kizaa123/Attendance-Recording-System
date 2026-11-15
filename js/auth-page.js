@@ -106,9 +106,14 @@
   }
 
   var params = new URLSearchParams(window.location.search);
-  if (params.get("mode") === "signup") {
-    setMode(true);
-  }
+  var openSignup = params.get("mode") === "signup";
+  try {
+    var storedAuthMode = sessionStorage.getItem("attendify_auth_mode");
+    if (storedAuthMode === "signup") openSignup = true;
+    if (storedAuthMode === "signin") openSignup = false;
+    sessionStorage.removeItem("attendify_auth_mode");
+  } catch (e) {}
+  setMode(!!openSignup);
 
   /* —— Login —— */
   var programmeSelect = document.getElementById("login-programme");
@@ -238,6 +243,9 @@
           dest = "dashboard.html";
           if (result.classId) dest += "?class=" + encodeURIComponent(result.classId);
           if (result.createCourse) dest += (result.classId ? "&" : "?") + "createCourse=1";
+        }
+        if (window.AttendifyPageTransitions && AttendifyPageTransitions.markPortalEnter) {
+          AttendifyPageTransitions.markPortalEnter();
         }
         window.location.replace(dest);
       });
@@ -667,6 +675,9 @@
         if (!result.ok) {
           showSignupError(result.error || "Could not create your account.");
           return;
+        }
+        if (window.AttendifyPageTransitions && AttendifyPageTransitions.markPortalEnter) {
+          AttendifyPageTransitions.markPortalEnter();
         }
         window.location.href = "dashboard.html";
       });

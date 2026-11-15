@@ -1,4 +1,8 @@
 (function () {
+  var FILL_MS = 3200;
+  var HOLD_AT_FULL_MS = 1100;
+  var FADE_OUT_MS = 560;
+
   function loginUrl() {
     if (window.AttendifyAuthEntry && AttendifyAuthEntry.loginAfterSplashHref) {
       return AttendifyAuthEntry.loginAfterSplashHref();
@@ -10,10 +14,7 @@
     window.location.replace(loginUrl());
   }
 
-  if (
-    window.AttendifyAuthEntry &&
-    !AttendifyAuthEntry.isMobileAuth()
-  ) {
+  if (window.AttendifyAuthEntry && !AttendifyAuthEntry.isMobileAuth()) {
     skipToLogin();
     return;
   }
@@ -27,15 +28,32 @@
   var fill = splash ? splash.querySelector(".auth-splash__bar-fill") : null;
   var bar = splash ? splash.querySelector(".auth-splash__bar") : null;
   var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var durationMs = reducedMotion ? 900 : 2000;
+  var fillMs = reducedMotion ? 1400 : FILL_MS;
+  var holdMs = reducedMotion ? 400 : HOLD_AT_FULL_MS;
+  var fadeMs = reducedMotion ? 0 : FADE_OUT_MS;
+
+  try {
+    document.documentElement.style.setProperty("--auth-splash-duration-mobile", fillMs + "ms");
+    document.documentElement.style.setProperty("--auth-splash-fade-ms", fadeMs + "ms");
+  } catch (e) {}
 
   function goLogin() {
+    try {
+      var splashParams = new URLSearchParams(window.location.search || "");
+      sessionStorage.setItem(
+        "attendify_auth_mode",
+        splashParams.get("mode") === "signup" ? "signup" : "signin"
+      );
+    } catch (e) {}
+    if (window.AttendifyPageTransitions && AttendifyPageTransitions.markSplashEnter) {
+      AttendifyPageTransitions.markSplashEnter();
+    }
     window.location.replace(loginUrl());
   }
 
   function setProgress(percent) {
     if (bar) bar.setAttribute("aria-valuenow", String(Math.round(percent)));
-    if (fill && reducedMotion) fill.style.width = percent + "%";
+    if (fill) fill.style.width = percent + "%";
   }
 
   if (!splash) {
@@ -43,20 +61,23 @@
     return;
   }
 
+  splash.classList.add("auth-splash--visible");
+
   var start = Date.now();
   function tick() {
     var elapsed = Date.now() - start;
-    var pct = Math.min(100, (elapsed / durationMs) * 100);
+    var pct = Math.min(100, (elapsed / fillMs) * 100);
     setProgress(pct);
-    if (elapsed < durationMs) window.requestAnimationFrame(tick);
+    if (elapsed < fillMs + holdMs) window.requestAnimationFrame(tick);
   }
   window.requestAnimationFrame(tick);
 
   window.setTimeout(function () {
+    setProgress(100);
     if (splash) {
       splash.classList.add("auth-splash--hide");
       splash.setAttribute("aria-busy", "false");
     }
-    window.setTimeout(goLogin, reducedMotion ? 120 : 400);
-  }, durationMs + 60);
+    window.setTimeout(goLogin, fadeMs + 40);
+  }, fillMs + holdMs);
 })();

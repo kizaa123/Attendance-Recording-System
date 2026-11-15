@@ -876,6 +876,7 @@
   function mount() {
     var nav = document.getElementById("faculty-nav");
     if (!nav) return;
+    document.body.classList.add("faculty-content-pending");
     initMobileSidebar(nav);
     initMobileBottomNav();
     renderShell(nav);
@@ -889,6 +890,8 @@
       if (session && session.lecturer && Attendify.paintLecturerChrome) {
         Attendify.paintLecturerChrome(session.lecturer, { sidebar: true, header: true });
       }
+      document.body.classList.remove("faculty-content-pending");
+      document.body.classList.add("faculty-content-ready");
     });
     document.querySelectorAll("#btn-logout").forEach(function (logoutBtn) {
       if (logoutBtn.dataset.bound) return;
