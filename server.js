@@ -14,23 +14,78 @@ const LISTEN_IPV6_ONLY = process.env.ATTENDIFY_IPV6_ONLY === "1";
 const root = __dirname;
 const pfxFile = path.join(root, "certs", "server.pfx");
 
+function isLoopbackHost(hostname) {
+  const h = String(hostname || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
+  return h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "0:0:0:0:0:0:0:1";
+}
+
+function hostNameFromHeader(hostHeader) {
+  const raw = String(hostHeader || "").trim();
+  if (!raw) return "";
+  if (raw.charAt(0) === "[") {
+    const end = raw.indexOf("]");
+    if (end !== -1) return raw.slice(1, end).toLowerCase();
+  }
+  return raw.split(":")[0].toLowerCase();
+}
+
 function getNetworkIp() {
   const nets = os.networkInterfaces();
-  const candidates = [];
+  const wifi = [];
+  const ethernet = [];
+  const other = [];
   for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      // Find IPv4 non-internal addresses
-      if (net.family === "IPv4" && !net.internal) {
-        // Prefer Wi-Fi or local network over VirtualBox/VMware virtual adapters
-        if (!name.toLowerCase().includes("virtual") && !name.toLowerCase().includes("vbox") && !net.address.startsWith("192.168.56.")) {
-          candidates.unshift(net.address);
-        } else {
-          candidates.push(net.address);
-        }
-      }
+    const lower = name.toLowerCase();
+    if (
+      lower.includes("virtual") ||
+      lower.includes("vbox") ||
+      lower.includes("vmware") ||
+      lower.includes("hyper-v") ||
+      lower.includes("wsl")
+    ) {
+      continue;
+    }
+    for (const net of nets[name] || []) {
+      const v4 = net.family === "IPv4" || net.family === 4;
+      if (!v4 || net.internal) continue;
+      if (String(net.address).startsWith("169.254.")) continue;
+      if (String(net.address).startsWith("192.168.56.")) continue;
+      const entry = { address: net.address, name: name };
+      if (/wi-?fi|wlan|wireless/i.test(name)) wifi.push(entry);
+      else if (/ethernet|eth\b/i.test(name)) ethernet.push(entry);
+      else other.push(entry);
     }
   }
-  return candidates[0] || "localhost";
+  const pick = wifi[0] || ethernet[0] || other[0];
+  return pick ? pick.address : "127.0.0.1";
+}
+
+function studentShareOrigin(req, isHttps) {
+  const lanIp = getNetworkIp();
+  const hasHttps = fs.existsSync(pfxFile);
+  const networkHttp = "http://" + lanIp + ":" + PORT;
+  const envPublic = String(process.env.ATTENDIFY_PUBLIC_ORIGIN || process.env.RENDER_EXTERNAL_URL || "")
+    .replace(/\/$/, "");
+  if (envPublic) return envPublic;
+
+  const reqHost = hostNameFromHeader(req.headers.host);
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim();
+  const reqProto = forwardedProto || (isHttps ? "https:" : "http:");
+  const hostHeader = String(req.headers.host || "").trim();
+  const reqOrigin = hostHeader ? reqProto + "//" + hostHeader : "http://localhost:" + PORT;
+
+  if (isLoopbackHost(reqHost) || !reqHost) {
+    return networkHttp;
+  }
+  if (hasHttps && reqProto === "https:") {
+    return networkHttp;
+  }
+  return reqOrigin.replace(/\/$/, "");
 }
 
 function sendJson(res, status, body, extraHeaders) {
@@ -183,14 +238,13 @@ function handleRequest(req, res) {
     const forwardedHost = String(req.headers["x-forwarded-host"] || req.headers.host || "").trim();
     const reqProto = forwardedProto || (isHttps ? "https:" : "http:");
     const reqOrigin = forwardedHost ? reqProto + "//" + forwardedHost : protocol + "//localhost:" + PORT;
-    const envPublic = String(process.env.ATTENDIFY_PUBLIC_ORIGIN || process.env.RENDER_EXTERNAL_URL || "")
-      .replace(/\/$/, "");
-    const publicOrigin = envPublic || reqOrigin;
+    const shareOrigin = studentShareOrigin(req, isHttps);
     sendJson(res, 200, {
       origin: "http://" + lanIp + ":" + PORT,
       httpsOrigin: hasHttps ? "https://" + lanIp + ":" + HTTPS_PORT : null,
       localOrigin: "http://localhost:" + PORT,
-      publicOrigin: publicOrigin,
+      shareOrigin: shareOrigin,
+      publicOrigin: shareOrigin,
       requestOrigin: reqOrigin,
       lanIp: lanIp,
       port: PORT,
@@ -592,6 +646,7 @@ httpServer.listen({ port: PORT, host: HOST, ipv6Only: LISTEN_IPV6_ONLY }, functi
   console.log("Local:    http://localhost:" + PORT + "/");
   console.log("          http://127.0.0.1:" + PORT + "/");
   console.log("Network:  http://" + lanIp + ":" + PORT + "/");
+  console.log("Students: use http://" + lanIp + ":" + PORT + "/join/<programme-id> on the same Wi-Fi (not localhost).");
 });
 
 if (fs.existsSync(pfxFile)) {

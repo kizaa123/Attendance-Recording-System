@@ -21,9 +21,16 @@
 
   function rememberShareOrigins(host) {
     if (!host) return;
-    if (host.publicOrigin) shareOrigin = String(host.publicOrigin).replace(/\/$/, "");
-    else if (host.requestOrigin) shareOrigin = String(host.requestOrigin).replace(/\/$/, "");
-    else if (host.origin) shareOrigin = String(host.origin).replace(/\/$/, "");
+    var pick = "";
+    if (host.shareOrigin && !isLoopbackOrigin(host.shareOrigin)) pick = host.shareOrigin;
+    else if (host.publicOrigin && !isLoopbackOrigin(host.publicOrigin)) pick = host.publicOrigin;
+    else if (host.origin && !isLoopbackOrigin(host.origin)) pick = host.origin;
+    else if (host.httpsOrigin && !isLoopbackOrigin(host.httpsOrigin)) pick = host.httpsOrigin;
+    else if (host.shareOrigin) pick = host.shareOrigin;
+    else if (host.publicOrigin) pick = host.publicOrigin;
+    else if (host.origin) pick = host.origin;
+    else if (host.requestOrigin) pick = host.requestOrigin;
+    if (pick) shareOrigin = String(pick).replace(/\/$/, "");
   }
 
   function connectionHint() {
@@ -881,23 +888,29 @@
   }
 
   function publicShareOrigin(hostInfo) {
-    var envOrigin = hostInfo && hostInfo.publicOrigin ? String(hostInfo.publicOrigin).replace(/\/$/, "") : "";
-    if (envOrigin) return envOrigin;
-    var reqOrigin = hostInfo && hostInfo.requestOrigin ? String(hostInfo.requestOrigin).replace(/\/$/, "") : "";
-    if (reqOrigin) return reqOrigin;
-    if (shareOrigin && !isLoopbackOrigin(shareOrigin)) {
-      return shareOrigin.replace(/\/$/, "");
+    hostInfo = hostInfo || {};
+    var ordered = [
+      hostInfo.shareOrigin,
+      hostInfo.publicOrigin,
+      shareOrigin,
+      hostInfo.origin,
+      hostInfo.httpsOrigin,
+      hostInfo.requestOrigin
+    ];
+    var i;
+    for (i = 0; i < ordered.length; i++) {
+      if (!ordered[i]) continue;
+      var candidate = String(ordered[i]).replace(/\/$/, "");
+      if (!isLoopbackOrigin(candidate)) return candidate;
+    }
+    for (i = 0; i < ordered.length; i++) {
+      if (ordered[i]) return String(ordered[i]).replace(/\/$/, "");
     }
     if (window.location.protocol !== "file:" && window.location.origin) {
       var pageOrigin = window.location.origin.replace(/\/$/, "");
       if (!isLoopbackOrigin(pageOrigin)) return pageOrigin;
-      if (hostInfo && hostInfo.origin && !isLoopbackOrigin(hostInfo.origin)) {
-        return String(hostInfo.origin).replace(/\/$/, "");
-      }
-      if (shareOrigin) return shareOrigin.replace(/\/$/, "");
-      return pageOrigin;
     }
-    if (hostInfo && hostInfo.localOrigin) return String(hostInfo.localOrigin).replace(/\/$/, "");
+    if (hostInfo.localOrigin) return String(hostInfo.localOrigin).replace(/\/$/, "");
     return (shareOrigin || API_BASE).replace(/\/$/, "");
   }
 
