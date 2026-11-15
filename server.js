@@ -497,7 +497,14 @@ function handleRequest(req, res) {
 
   const joinMatch = rel.match(/^\/join\/([^/]+)\/?$/i);
   if (joinMatch) {
-    rel = "/enroll.html";
+    const enrollParams = new URLSearchParams(url.search || "");
+    enrollParams.set("class", joinMatch[1]);
+    res.writeHead(302, {
+      Location: "/enroll.html?" + enrollParams.toString(),
+      "Cache-Control": "no-store"
+    });
+    res.end();
+    return;
   }
   const scanMatch = rel.match(/^\/scan\/([^/]+)\/?$/i);
   if (scanMatch) {

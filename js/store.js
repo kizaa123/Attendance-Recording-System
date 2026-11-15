@@ -895,10 +895,36 @@
     return String(url || "").replace(/^https?:\/\//i, "");
   }
 
-  function enrollUrl(classId) {
+  function enrollUrl(classId, level) {
     var origin = publicShareOrigin();
     var id = String(classId || "").trim();
-    return origin + "/join/" + encodeURIComponent(id);
+    var url = origin + "/join/" + encodeURIComponent(id);
+    var lvl = level != null && level !== "" ? Number(level) : null;
+    if (lvl != null && !isNaN(lvl)) {
+      url += "?level=" + encodeURIComponent(String(lvl));
+    }
+    return url;
+  }
+
+  function enrollShareSummary(course, level) {
+    if (!course) return "Student registration for this programme";
+    var label = (course.code || "") + (course.code && course.name ? " — " : "") + (course.name || "");
+    label = label.trim() || "this programme";
+    var lvl = level != null && level !== "" ? Number(level) : null;
+    if (lvl != null && !isNaN(lvl)) {
+      return (
+        "Students at Level " +
+        lvl +
+        " on " +
+        label +
+        " open this link once to join the programme roster (one QR for attendance in all your classes)."
+      );
+    }
+    return (
+      "Students on " +
+      label +
+      " open this link once to join the programme roster (one QR for attendance in all your classes)."
+    );
   }
 
   function scanShareUrl(token) {
@@ -977,7 +1003,7 @@
     var token = 0;
 
     function resetPreview() {
-      if (previewEl) previewEl.classList.add("hidden");
+      if (previewEl && !options.keepPreviewVisible) previewEl.classList.add("hidden");
       if (imgEl) {
         imgEl.removeAttribute("src");
         imgEl.classList.add("hidden");
@@ -996,7 +1022,7 @@
       }
       timer = setTimeout(function () {
         var run = ++token;
-        if (previewEl) previewEl.classList.remove("hidden");
+        if (previewEl && !options.keepPreviewVisible) previewEl.classList.remove("hidden");
         if (statusEl) statusEl.textContent = "Looking up UCC photo…";
         if (spinnerEl) spinnerEl.classList.remove("hidden");
         if (imgEl) imgEl.classList.add("hidden");
@@ -1755,6 +1781,7 @@
     deleteProgrammeCourse: deleteProgrammeCourse,
     attendanceRows: attendanceRows,
     enrollUrl: enrollUrl,
+    enrollShareSummary: enrollShareSummary,
     refreshShareOrigin: refreshShareOrigin,
     publicShareOrigin: publicShareOrigin,
     scanShareUrl: scanShareUrl,

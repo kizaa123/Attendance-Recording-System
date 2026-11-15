@@ -74,8 +74,13 @@ function renderRoster() {
   document.getElementById("programme-page-code").textContent = codeLine;
   document.title = "Attendify — " + course.code;
 
-  var url = Attendify.enrollUrl(classId);
+  var shareLevel = levelFilter || (course.teachLevel != null ? course.teachLevel : "");
+  var url = Attendify.enrollUrl(classId, shareLevel);
   document.getElementById("course-registered-count").textContent = String(all.length);
+  var enrollSummary = document.getElementById("enroll-share-summary");
+  if (enrollSummary && Attendify.enrollShareSummary) {
+    enrollSummary.textContent = Attendify.enrollShareSummary(course, shareLevel);
+  }
   var enrollLink = document.getElementById("enroll-link");
   var label = Attendify.displayShareUrl ? Attendify.displayShareUrl(url) : url;
   enrollLink.textContent = label;
@@ -206,7 +211,7 @@ function showQr(student) {
 }
 
 function copyLink() {
-  var link = Attendify.enrollUrl(classId);
+  var link = Attendify.enrollUrl(classId, levelFilter || (course && course.teachLevel));
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link);
   document.getElementById("copy-label").textContent = "Copied";
   setTimeout(function () {

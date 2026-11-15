@@ -39,7 +39,7 @@ function renderRoster() {
 
   var total = Attendify.studentsFor(classId).length;
   var title = courseTitle();
-  var url = Attendify.enrollUrl(classId);
+  var url = Attendify.enrollUrl(classId, course && course.teachLevel);
 
   document.getElementById("class-label").textContent = title;
   var enrollTitle = document.getElementById("enroll-course-title");
@@ -112,7 +112,7 @@ function showQr(student) {
 }
 
 function copyLink() {
-  var link = Attendify.enrollUrl(classId);
+  var link = Attendify.enrollUrl(classId, course && course.teachLevel);
   var label = document.getElementById("copy-label");
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(link);

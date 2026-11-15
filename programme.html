@@ -65,7 +65,7 @@
       <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <p class="text-sm text-slate-600 leading-relaxed max-w-2xl">
-            Each programme has its own link. Registrations appear in the table below and count toward course attendance.
+            Share one registration link per programme level. New students appear in the table below and use the same QR for every class you teach.
           </p>
           <button type="button" id="btn-manual-add" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold border border-slate-200 transition shrink-0">
             <svg class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -73,11 +73,11 @@
           </button>
         </div>
         <div>
-          <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Registration link</label>
-          <p class="text-xs text-slate-500 mt-1 mb-2">Share the registration link below — students join this programme only. Course attendance uses the same roster.</p>
+          <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Student registration link</label>
+          <p id="enroll-share-summary" class="text-sm text-slate-600 leading-relaxed mt-2 mb-3"></p>
           <div class="mt-1 flex flex-col sm:flex-row gap-2">
             <a id="enroll-link" href="#" target="_blank" rel="noopener noreferrer"
-              class="flex-1 min-w-0 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 px-3 py-3 text-sm font-semibold text-teal-800 break-all transition"></a>
+              class="flex-1 min-w-0 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 px-3 py-3 text-sm font-mono font-semibold text-teal-900 break-all transition" title="Registration URL"></a>
             <a id="enroll-open" href="#" target="_blank" rel="noopener noreferrer"
               class="px-4 py-2.5 rounded-xl bg-brand-900 hover:bg-brand-800 text-white text-sm font-bold text-center transition shrink-0">
               Open link
@@ -175,10 +175,10 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="js/page-transitions.js?v=1"></script>
-  <script src="js/store.js?v=26"></script>
+  <script src="js/store.js?v=30"></script>
   <script src="js/student-list-ui.js?v=1"></script>
   <script src="js/auth-guard.js?v=1"></script>
   <script src="js/sidebar.js?v=22"></script>
-  <script src="js/programme.js?v=13"></script>
+  <script src="js/programme.js?v=14"></script>
 </body>
 </html>
