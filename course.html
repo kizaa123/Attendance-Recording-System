@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
   <title>Attendify - Course</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/tailwind-dashboard.js"></script>
-  <link rel="stylesheet" href="css/style.css?v=25">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <link rel="stylesheet" href="css/style.css?v=27">
 </head>
 <body class="h-full bg-[#f8fafc] text-slate-800 antialiased flex flex-row overflow-hidden">
 
@@ -141,15 +143,20 @@
         </div>
         <button type="button" id="ta-share-close" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-lg flex items-center justify-center shrink-0">×</button>
       </div>
+      <div class="flex items-center justify-center gap-2 mb-3">
+        <img src="/icons/icon-192.svg" width="36" height="36" alt="" class="w-9 h-9 rounded-lg shadow-sm shrink-0" />
+        <p class="text-xs font-bold text-slate-800">Attendify shared scanner</p>
+      </div>
       <div class="flex justify-center mb-4">
-        <div id="ta-share-qr" class="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2 w-40 h-40 flex items-center justify-center">
+        <div id="ta-share-qr" class="attendify-share-qr rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2 flex items-center justify-center min-w-[10.5rem] min-h-[10.5rem]">
           <div class="w-5 h-5 border-2 border-slate-200 border-t-teal-500 rounded-full animate-spin"></div>
         </div>
       </div>
       <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Tap to open</p>
       <a id="ta-share-link-anchor" href="#" target="_blank" rel="noopener noreferrer"
-        class="block mb-3 rounded-xl border border-teal-200 bg-teal-50 px-3 py-3 text-sm font-semibold text-teal-800 hover:bg-teal-100 hover:border-teal-300 transition break-all leading-snug">
-        Generating link…
+        class="flex items-center gap-2.5 mb-3 rounded-xl border border-teal-200 bg-teal-50 px-3 py-3 text-sm font-semibold text-teal-800 hover:bg-teal-100 hover:border-teal-300 transition leading-snug">
+        <img src="/icons/icon-192.svg" width="32" height="32" alt="" class="w-8 h-8 rounded-lg shadow-sm shrink-0" aria-hidden="true" />
+        <span id="ta-share-link-text" class="break-all min-w-0 flex-1">Generating link…</span>
       </a>
       <div class="flex gap-2 mb-3">
         <a id="ta-share-open" href="#" target="_blank" rel="noopener noreferrer"
@@ -195,10 +202,19 @@
             <span class="scan-corner scan-corner-br"></span>
             <div id="qr-reader"></div>
             <div class="scan-frame-guide" aria-hidden="true"></div>
-            <div class="absolute bottom-3 inset-x-3 z-10 flex items-center justify-end gap-1 pointer-events-none">
-              <div class="pointer-events-auto flex gap-1">
-                <button type="button" id="btn-scan-flash" class="w-9 h-9 rounded-full bg-black/50 text-white text-xs" title="Flash">⚡</button>
-                <button type="button" id="btn-scan-flip" class="w-9 h-9 rounded-full bg-black/50 text-white text-xs" title="Flip camera">↻</button>
+            <span id="scan-camera-facing-badge" class="scan-camera-facing-pill absolute top-2 left-2 z-10">Back</span>
+            <div class="absolute bottom-3 inset-x-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
+              <div class="pointer-events-auto flex items-center gap-1">
+                <button type="button" id="btn-camera-back" class="scan-camera-facing-btn is-active" aria-pressed="true" title="Back camera">Back</button>
+                <button type="button" id="btn-camera-front" class="scan-camera-facing-btn" aria-pressed="false" title="Front camera">Front</button>
+              </div>
+              <div class="pointer-events-auto flex items-center gap-1">
+                <button type="button" id="btn-scan-flash" class="scan-camera-tool-btn" title="Flash (when supported)">
+                  <span class="material-symbols-outlined" aria-hidden="true">flash_on</span>
+                </button>
+                <button type="button" id="btn-scan-flip" class="scan-camera-tool-btn" title="Switch camera">
+                  <span class="material-symbols-outlined" aria-hidden="true">cameraswitch</span>
+                </button>
               </div>
             </div>
           </div>
@@ -235,10 +251,10 @@
   <script src="js/html5-qrcode.min.js"></script>
   <script src="js/page-transitions.js?v=1"></script>
   <script src="js/scan-cache.js?v=1"></script>
-  <script src="js/store.js?v=37"></script>
+  <script src="js/store.js?v=39"></script>
   <script src="js/auth-guard.js?v=1"></script>
   <script src="js/student-list-ui.js?v=6"></script>
-  <script src="js/scanner-hud.js?v=27"></script>
+  <script src="js/scanner-hud.js?v=30"></script>
   <script src="js/sidebar.js?v=22"></script>
   <script src="js/course.js?v=36"></script>
 </body>

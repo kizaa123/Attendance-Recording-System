@@ -3,19 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="color-scheme" content="light">
   <base href="/">
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#101627">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <title>Attendify | TA Scanner</title>
+  <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
+  <meta property="og:title" content="Attendify TA Scanner">
+  <meta property="og:description" content="Shared scanner access for live UCC attendance.">
+  <meta property="og:image" content="/icons/icon-192.svg">
+  <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/js/tailwind-dashboard.js"></script>
-  <link rel="stylesheet" href="/css/style.css?v=scanner-ta">
+  <link rel="stylesheet" href="/css/style.css?v=27">
   <style>
     body { font-family: "Plus Jakarta Sans", sans-serif; }
     .material-symbols-outlined {
@@ -42,7 +48,7 @@
     .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 12px); }
   </style>
 </head>
-<body class="h-full bg-slate-100 overflow-hidden flex flex-col select-none">
+<body class="h-full bg-slate-100 overflow-hidden flex flex-col select-none" style="color-scheme: light;">
 
   <!-- ═══════════════════════════════════════════════
        ERROR SCREEN (shown when token invalid/expired)
@@ -89,9 +95,16 @@
             <span class="scan-corner scan-corner-br"></span>
             <div id="ta-qr-reader"></div>
             <div class="scan-frame-guide" aria-hidden="true"></div>
-            <div class="absolute bottom-3 inset-x-3 z-10 flex items-center justify-end gap-1 pointer-events-none">
-              <div class="pointer-events-auto flex gap-1">
-                <button type="button" id="btn-ta-flip" class="w-9 h-9 rounded-full bg-black/50 text-white text-xs" title="Flip camera">↻</button>
+            <span id="ta-camera-facing-badge" class="scan-camera-facing-pill absolute top-2 left-2 z-10">Back</span>
+            <div class="absolute bottom-3 inset-x-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
+              <div class="pointer-events-auto flex items-center gap-1">
+                <button type="button" id="btn-ta-back" class="scan-camera-facing-btn is-active" aria-pressed="true" title="Back camera">Back</button>
+                <button type="button" id="btn-ta-front" class="scan-camera-facing-btn" aria-pressed="false" title="Front camera">Front</button>
+              </div>
+              <div class="pointer-events-auto flex items-center gap-1">
+                <button type="button" id="btn-ta-flip" class="scan-camera-tool-btn" title="Switch camera">
+                  <span class="material-symbols-outlined" aria-hidden="true">cameraswitch</span>
+                </button>
               </div>
             </div>
             <div id="ta-camera-prompt" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/92 p-4 text-center">
@@ -181,8 +194,8 @@
     }
   </script>
   <script src="/js/scan-cache.js?v=1"></script>
-  <script src="/js/store.js?v=37"></script>
-  <script src="/js/scanner-hud.js?v=27"></script>
+  <script src="/js/store.js?v=38"></script>
+  <script src="/js/scanner-hud.js?v=30"></script>
   <script src="/js/mobile-app.js?v=2"></script>
   <script>
   (function () {
@@ -367,7 +380,7 @@
       flushTaScanQueue();
 
       if (navigator.onLine !== false) {
-        setInterval(pollSession, 18000);
+        setInterval(pollSession, 2500);
       } else {
         window.addEventListener("online", function () {
           flushTaScanQueue();
@@ -408,11 +421,36 @@
       });
     }
 
-    function flipTaCamera() {
-      cameraFacing = cameraFacing === "environment" ? "user" : "environment";
+    function syncTaFacingUi() {
+      var Hud = window.AttendifyScannerHud;
+      if (!Hud) return;
+      Hud.updateCameraFacingBadge(document.getElementById("ta-camera-facing-badge"), cameraFacing);
+      Hud.setFacingButtonStates(
+        document.getElementById("btn-ta-front"),
+        document.getElementById("btn-ta-back"),
+        cameraFacing
+      );
+    }
+
+    function applyTaCameraFacing(next) {
+      var want = next === "user" ? "user" : "environment";
+      if (!scanner && !cameraStarting) {
+        cameraFacing = want;
+        syncTaFacingUi();
+        hideCameraPrompt();
+        startCamera();
+        return;
+      }
+      if (cameraFacing === want) return;
+      cameraFacing = want;
+      syncTaFacingUi();
       stopCamera().then(function () {
-        setTimeout(startCamera, 120);
+        setTimeout(startCamera, 80);
       });
+    }
+
+    function flipTaCamera() {
+      applyTaCameraFacing(cameraFacing === "environment" ? "user" : "environment");
     }
 
     function startCamera() {
@@ -458,6 +496,7 @@
         .then(function (result) {
           hideCameraPrompt();
           if (result && result.facing) cameraFacing = result.facing;
+          syncTaFacingUi();
         })
         .catch(function (err) {
           handleCameraError(err);
@@ -516,6 +555,11 @@
 
     var flipBtn = document.getElementById("btn-ta-flip");
     if (flipBtn) flipBtn.addEventListener("click", flipTaCamera);
+    var taBackBtn = document.getElementById("btn-ta-back");
+    var taFrontBtn = document.getElementById("btn-ta-front");
+    if (taBackBtn) taBackBtn.addEventListener("click", function () { applyTaCameraFacing("environment"); });
+    if (taFrontBtn) taFrontBtn.addEventListener("click", function () { applyTaCameraFacing("user"); });
+    syncTaFacingUi();
 
     document.getElementById("btn-prompt-manual").addEventListener("click", function () {
       openManualModal();
@@ -653,6 +697,7 @@
             if (result.record && result.record.scannedAt) {
               mergeServerRecord(result);
             }
+            pollSession();
             return;
           }
           if (result && result.error === "session_closed") {

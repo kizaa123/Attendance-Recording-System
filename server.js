@@ -14,6 +14,62 @@ const LISTEN_IPV6_ONLY = process.env.ATTENDIFY_IPV6_ONLY === "1";
 const root = __dirname;
 const pfxFile = path.join(root, "certs", "server.pfx");
 
+function escapeHtmlAttr(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+function isLinkPreviewCrawler(userAgent) {
+  return /facebookexternalhit|Facebot|WhatsApp|Twitterbot|Slackbot|LinkedInBot|Discordbot|TelegramBot|Signal/i.test(
+    String(userAgent || "")
+  );
+}
+
+function requestAbsoluteOrigin(req) {
+  const host = req.headers.host || "localhost:" + PORT;
+  const protoHeader = req.headers["x-forwarded-proto"];
+  const proto =
+    protoHeader && String(protoHeader).split(",")[0].trim()
+      ? String(protoHeader).split(",")[0].trim()
+      : req.socket && req.socket.encrypted
+        ? "https"
+        : "http";
+  return proto + "://" + host;
+}
+
+function sendAttendifyLinkPreview(res, req, opts) {
+  opts = opts || {};
+  const origin = requestAbsoluteOrigin(req);
+  const target = origin + (opts.redirectPath || "/");
+  const title = opts.title || "Attendify";
+  const description = opts.description || "University of Cape Coast attendance";
+  const image = origin + "/icons/icon-192.svg";
+  const html =
+    "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
+    '<meta property="og:title" content="' +
+    escapeHtmlAttr(title) +
+    '">' +
+    '<meta property="og:description" content="' +
+    escapeHtmlAttr(description) +
+    '">' +
+    '<meta property="og:image" content="' +
+    escapeHtmlAttr(image) +
+    '">' +
+    '<meta property="og:type" content="website">' +
+    '<meta name="twitter:card" content="summary">' +
+    '<link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">' +
+    '<meta http-equiv="refresh" content="0;url=' +
+    escapeHtmlAttr(target) +
+    '">' +
+    "</head><body><p><a href=\"" +
+    escapeHtmlAttr(target) +
+    '">Open Attendify</a></p></body></html>';
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(html);
+}
+
 function isLoopbackHost(hostname) {
   const h = String(hostname || "")
     .trim()
@@ -696,8 +752,17 @@ function handleRequest(req, res) {
   if (joinMatch) {
     const enrollParams = new URLSearchParams(url.search || "");
     enrollParams.set("class", joinMatch[1]);
+    const enrollDest = "/enroll.html?" + enrollParams.toString();
+    if (isLinkPreviewCrawler(req.headers["user-agent"])) {
+      sendAttendifyLinkPreview(res, req, {
+        redirectPath: enrollDest,
+        title: "Attendify student registration",
+        description: "Register once for your programme QR attendance card."
+      });
+      return;
+    }
     res.writeHead(302, {
-      Location: "/enroll.html?" + enrollParams.toString(),
+      Location: enrollDest,
       "Cache-Control": "no-store"
     });
     res.end();
@@ -727,8 +792,17 @@ function handleRequest(req, res) {
     }
     const taParams = new URLSearchParams(url.search || "");
     taParams.set("token", scanToken);
+    const taDest = "/ta-scanner.html?" + taParams.toString();
+    if (isLinkPreviewCrawler(req.headers["user-agent"])) {
+      sendAttendifyLinkPreview(res, req, {
+        redirectPath: taDest,
+        title: "Attendify TA scanner",
+        description: "Shared scanner access for live attendance."
+      });
+      return;
+    }
     res.writeHead(302, {
-      Location: "/ta-scanner.html?" + taParams.toString(),
+      Location: taDest,
       "Cache-Control": "no-store"
     });
     res.end();

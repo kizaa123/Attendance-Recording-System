@@ -413,14 +413,20 @@ Attendify.ready()
   });
   lastRosterSignature = rosterSignature();
   renderRoster();
+  var rosterSyncTick = 0;
   setInterval(function () {
     if (document.hidden) return;
-    Attendify.ready().then(function () {
+    rosterSyncTick += 1;
+    var banner = document.getElementById("live-scan-banner");
+    var liveOn = banner && !banner.classList.contains("hidden");
+    if (!liveOn && rosterSyncTick % 4 !== 0) return;
+    Attendify.syncFromServer().then(function () {
       var sig = rosterSignature();
-      if (sig === lastRosterSignature) return;
-      lastRosterSignature = sig;
-      renderRoster();
+      if (sig !== lastRosterSignature) {
+        lastRosterSignature = sig;
+        renderRoster();
+      }
       updateLiveScanBanner();
     });
-  }, 5000);
+  }, 1000);
   });

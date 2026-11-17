@@ -194,6 +194,7 @@ function startCamera() {
     .then(function (result) {
       cameraStarting = false;
       if (result && result.facing) cameraFacing = result.facing;
+      syncFacingUi();
     })
     .catch(function () {
       cameraStarting = false;
@@ -206,15 +207,39 @@ function startCamera() {
     });
 }
 
+function syncFacingUi() {
+  var Hud = window.AttendifyScannerHud;
+  if (!Hud) return;
+  Hud.updateCameraFacingBadge(document.getElementById("scan-camera-facing-badge"), cameraFacing);
+  Hud.setFacingButtonStates(
+    document.getElementById("btn-camera-front"),
+    document.getElementById("btn-camera-back"),
+    cameraFacing
+  );
+}
+
+function applyCameraFacing(next) {
+  var want = next === "user" ? "user" : "environment";
+  if (!scanner && !cameraStarting) {
+    cameraFacing = want;
+    syncFacingUi();
+    startCamera();
+    return;
+  }
+  if (cameraFacing === want) return;
+  cameraFacing = want;
+  syncFacingUi();
+  stopCamera().then(function () {
+    setTimeout(startCamera, 80);
+  });
+}
+
 function flipCamera() {
   if (!scanner && !cameraStarting) {
     startCamera();
     return;
   }
-  cameraFacing = cameraFacing === "environment" ? "user" : "environment";
-  stopCamera().then(function () {
-    setTimeout(startCamera, 120);
-  });
+  applyCameraFacing(cameraFacing === "environment" ? "user" : "environment");
 }
 
 function openScannerCameraAfterLayout() {
@@ -291,6 +316,15 @@ function openScannerModal(classId, lectureName, options) {
 
 var currentTaShareUrl = "";
 
+function setTaShareLinkText(msg) {
+  var span = document.getElementById("ta-share-link-text");
+  if (span) span.textContent = msg;
+  else {
+    var anchor = document.getElementById("ta-share-link-anchor");
+    if (anchor) anchor.textContent = msg;
+  }
+}
+
 function openTaShareModal() {
   var modal = document.getElementById("taShareModal");
   if (!modal) return;
@@ -301,10 +335,8 @@ function openTaShareModal() {
   if (copiedMsg) copiedMsg.classList.add("hidden");
   currentTaShareUrl = "";
   if (input) input.value = "Generating TA link...";
-  if (anchor) {
-    anchor.textContent = "Generating TA link...";
-    anchor.removeAttribute("href");
-  }
+  setTaShareLinkText("Generating TA link...");
+  if (anchor) anchor.removeAttribute("href");
   if (qrContainer) {
     qrContainer.innerHTML = '<div class="w-5 h-5 border-2 border-slate-200 border-t-teal-500 rounded-full animate-spin"></div>';
   }
@@ -318,7 +350,7 @@ function openTaShareModal() {
 
   if (!sid) {
     if (input) input.value = "Could not find active session ID.";
-    if (anchor) anchor.textContent = "Could not find active session ID.";
+    setTaShareLinkText("Could not find active session ID.");
     return;
   }
 
@@ -326,33 +358,28 @@ function openTaShareModal() {
     if (!res.ok) {
       var err = res.error || "Failed to generate link.";
       if (input) input.value = err;
-      if (anchor) anchor.textContent = err;
+      setTaShareLinkText(err);
       return;
     }
     currentTaShareUrl = res.url;
     var label = res.displayUrl || (Attendify.displayShareUrl ? Attendify.displayShareUrl(res.url) : res.url);
     if (input) input.value = res.url;
-    if (anchor) {
-      anchor.textContent = label;
-      anchor.href = res.url;
-    }
+    setTaShareLinkText(label);
+    if (anchor) anchor.href = res.url;
     var openBtn = document.getElementById("ta-share-open");
     if (openBtn) {
       openBtn.href = res.url;
       openBtn.classList.remove("pointer-events-none", "opacity-50");
     }
-    if (qrContainer && typeof QRCode !== "undefined") {
-      qrContainer.innerHTML = "";
-      new QRCode(qrContainer, {
-        text: res.url,
-        width: 144,
-        height: 144,
-        correctLevel: QRCode.CorrectLevel.M
+    if (qrContainer && Attendify.drawBrandedShareQr) {
+      Attendify.drawBrandedShareQr(qrContainer, res.url, null, "attendify-ta-scanner.png", {
+        size: 156,
+        avatar: 38
       });
     }
   }).catch(function () {
     if (input) input.value = "Error generating link.";
-    if (anchor) anchor.textContent = "Error generating link.";
+    setTaShareLinkText("Error generating link.");
   });
 }
 
@@ -690,6 +717,11 @@ if (viewRosterBtn) {
   });
 }
 document.getElementById("btn-scan-flip").addEventListener("click", flipCamera);
+var dashCamBack = document.getElementById("btn-camera-back");
+var dashCamFront = document.getElementById("btn-camera-front");
+if (dashCamBack) dashCamBack.addEventListener("click", function () { applyCameraFacing("environment"); });
+if (dashCamFront) dashCamFront.addEventListener("click", function () { applyCameraFacing("user"); });
+syncFacingUi();
 
 document.addEventListener("keydown", function (event) {
   if (event.key === "Escape") closeScannerModal();
@@ -1048,14 +1080,28 @@ Attendify.ready().then(function () {
     promptCreateFirstCourse(classFromQuery);
   }
 
+  var dashSyncTick = 0;
   setInterval(function () {
-    Attendify.ready().then(function () {
+    if (document.hidden) return;
+    dashSyncTick += 1;
+    var scanning = scannerModal && !scannerModal.classList.contains("hidden");
+    if (!scanning && dashSyncTick % 4 !== 0) return;
+    Attendify.syncFromServer().then(function () {
       renderDashboard();
-      if (scannerModal && !scannerModal.classList.contains("hidden")) {
+      if (scanning) {
         renderLive();
       }
     });
-  }, 4000);
+  }, 1000);
+
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && scannerModal && !scannerModal.classList.contains("hidden")) {
+      Attendify.syncFromServer().then(function () {
+        renderDashboard();
+        renderLive();
+      });
+    }
+  });
   if (params.get("resumeScan") === "1" && Attendify.getLiveScanSession) {
     var live = Attendify.getLiveScanSession();
     if (live && Attendify.isLiveScanSessionStillOpen(live)) {

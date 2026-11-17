@@ -170,18 +170,29 @@
       })
       .then(function (host) {
         rememberShareOrigins(host);
-        return apiFetch("/api/state");
+        return syncFromServer();
       })
-      .then(function (response) {
-        return response.json();
-      })
-      .then(function (state) {
-        applyState(state);
+      .then(function () {
         flushPendingAttendanceScans();
         return cache;
       })
       .catch(function () {
         if (!shareOrigin) shareOrigin = window.location.origin;
+        return cache;
+      });
+  }
+
+  /** Pull latest attendance from server (TA scans, second device) without /api/host round-trip. */
+  function syncFromServer() {
+    return apiFetch("/api/state")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (state) {
+        if (state && typeof state === "object") applyState(state);
+        return cache;
+      })
+      .catch(function () {
         return cache;
       });
   }
@@ -1320,10 +1331,30 @@
     URL.revokeObjectURL(url);
   }
 
-  function drawQr(element, text, downloadLink, filename, photoUrl) {
+  var ATTENDIFY_BRAND_LOGO = "/icons/icon-192.svg";
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    var rad = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
+    ctx.closePath();
+  }
+
+  function drawBrandedShareQr(element, text, downloadLink, filename, opts) {
+    opts = Object.assign({ size: 168, avatar: 40, roundLogo: true }, opts || {});
+    drawQr(element, text, downloadLink, filename || "attendify-scanner-link.png", ATTENDIFY_BRAND_LOGO, opts);
+  }
+
+  function drawQr(element, text, downloadLink, filename, photoUrl, opts) {
     if (!element) return;
-    var size = 224;
-    var avatar = 50;
+    opts = opts || {};
+    var size = opts.size || 224;
+    var avatar = opts.avatar != null ? opts.avatar : 50;
+    var roundLogo = !!opts.roundLogo;
     var rawPhoto = String(photoUrl || "").trim();
     if (rawPhoto.indexOf("cdn.ucc.edu.gh") !== -1) {
       var tagMatch = rawPhoto.match(/[?&]tag=([^&]+)/i);
@@ -1359,17 +1390,30 @@
         if (photoUrl.indexOf("data:") !== 0) face.crossOrigin = "anonymous";
         face.onload = function () {
           var pad = 5;
-          var r = avatar / 2;
+          var half = avatar / 2;
+          var x = centerX - half;
+          var y = centerY - half;
           ctx.fillStyle = "#ffffff";
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, r + pad, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(face, centerX - r, centerY - r, avatar, avatar);
-          ctx.restore();
+          if (roundLogo) {
+            roundRectPath(ctx, x - pad, y - pad, avatar + pad * 2, avatar + pad * 2, avatar * 0.24 + pad);
+            ctx.fill();
+            ctx.save();
+            roundRectPath(ctx, x, y, avatar, avatar, avatar * 0.24);
+            ctx.clip();
+            ctx.drawImage(face, x, y, avatar, avatar);
+            ctx.restore();
+          } else {
+            var r = half;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, r + pad, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(face, centerX - r, centerY - r, avatar, avatar);
+            ctx.restore();
+          }
           resolve(true);
         };
         face.onerror = function () {
@@ -2040,6 +2084,7 @@
   global.Attendify = {
     load: load,
     ready: ready,
+    syncFromServer: syncFromServer,
     connectionHint: connectionHint,
     classById: classById,
     studentsFor: studentsFor,
@@ -2103,6 +2148,8 @@
     formatTime: formatTime,
     formatStudentLevel: formatStudentLevel,
     drawQr: drawQr,
+    drawBrandedShareQr: drawBrandedShareQr,
+    brandLogoUrl: ATTENDIFY_BRAND_LOGO,
     requestedClassId: requestedClassId,
     today: today,
     dashboardStats: dashboardStats,

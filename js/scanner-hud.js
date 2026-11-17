@@ -260,9 +260,30 @@
     return lastVerifiedStudentId;
   }
 
+  function armReaderForDarkModeSafe(el) {
+    if (!el) return;
+    el.style.colorScheme = "light";
+    el.style.backgroundColor = "#000000";
+    el.setAttribute("data-color-scheme", "light");
+    var shell = el.closest ? el.closest(".scan-camera-shell") : null;
+    if (shell) {
+      shell.style.colorScheme = "light";
+      shell.setAttribute("data-scan-light", "1");
+    }
+    var modal = el.closest ? el.closest("#scannerModal, #mainUI") : null;
+    if (modal) {
+      modal.style.colorScheme = "light";
+    }
+    var docEl = document.documentElement;
+    if (docEl) docEl.style.colorScheme = "light";
+  }
+
   function prepareQrReader(readerId) {
     var el = document.getElementById(readerId || "qr-reader");
-    if (el) el.innerHTML = "";
+    if (el) {
+      el.innerHTML = "";
+      armReaderForDarkModeSafe(el);
+    }
   }
 
   /** Stop scanner and clear the reader DOM so a new instance can attach. */
@@ -310,6 +331,29 @@
   /** Phones/tablets need a tap before getUserMedia (iOS / many Android browsers). */
   function prefersTapToStartCamera() {
     return isMobileDevice();
+  }
+
+  function cameraFacingLabel(facing) {
+    return facing === "user" ? "Front camera" : "Back camera";
+  }
+
+  function updateCameraFacingBadge(el, facing) {
+    if (!el) return;
+    el.textContent = facing === "user" ? "Front" : "Back";
+    el.setAttribute("data-facing", facing === "user" ? "user" : "environment");
+    el.setAttribute("title", cameraFacingLabel(facing));
+  }
+
+  function setFacingButtonStates(frontBtn, backBtn, facing) {
+    var isFront = facing === "user";
+    if (frontBtn) {
+      frontBtn.classList.toggle("is-active", isFront);
+      frontBtn.setAttribute("aria-pressed", isFront ? "true" : "false");
+    }
+    if (backBtn) {
+      backBtn.classList.toggle("is-active", !isFront);
+      backBtn.setAttribute("aria-pressed", !isFront ? "true" : "false");
+    }
   }
 
   function whenHtml5QrcodeReady(callback, timeoutMs) {
@@ -478,6 +522,15 @@
       return instance
         .start(plan.video, plan.config, onScan, function () {})
         .then(function () {
+          var host = document.getElementById(readerId);
+          armReaderForDarkModeSafe(host);
+          if (host) {
+            host.querySelectorAll("video, canvas, img").forEach(function (node) {
+              node.style.filter = "none";
+              node.style.webkitFilter = "none";
+              node.style.colorScheme = "light";
+            });
+          }
           return {
             scanner: instance,
             attempt: index,
@@ -521,6 +574,9 @@
     startQrCamera: startQrCamera,
     isMobileDevice: isMobileDevice,
     prefersTapToStartCamera: prefersTapToStartCamera,
-    whenHtml5QrcodeReady: whenHtml5QrcodeReady
+    whenHtml5QrcodeReady: whenHtml5QrcodeReady,
+    cameraFacingLabel: cameraFacingLabel,
+    updateCameraFacingBadge: updateCameraFacingBadge,
+    setFacingButtonStates: setFacingButtonStates
   };
 })(window);

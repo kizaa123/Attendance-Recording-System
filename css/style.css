@@ -1,5 +1,46 @@
 html {
   -webkit-tap-highlight-color: transparent;
+  color-scheme: light;
+}
+
+/* QR scan + camera: stay in light rendering (OS dark mode must not invert video/canvas/QR). */
+.scan-camera-shell,
+.scan-camera-shell #qr-reader,
+.scan-camera-shell #ta-qr-reader,
+#scannerModal,
+#scannerModal .scanner-dialog,
+#mainUI,
+.attendify-qr-host,
+.attendify-qr-wrap,
+.attendify-qr-canvas,
+.attendify-share-qr {
+  color-scheme: only light;
+  forced-color-adjust: none;
+}
+
+.scan-camera-shell video,
+.scan-camera-shell canvas,
+.scan-camera-shell #qr-reader video,
+.scan-camera-shell #ta-qr-reader video,
+.scan-camera-shell #qr-reader canvas,
+.scan-camera-shell #ta-qr-reader canvas {
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+.scan-camera-shell #qr-reader,
+.scan-camera-shell #ta-qr-reader {
+  background: #000 !important;
+}
+
+.attendify-qr-host,
+.attendify-qr-wrap {
+  background: #ffffff !important;
+}
+
+.attendify-qr-canvas,
+.attendify-qr-host canvas {
+  background-color: #ffffff !important;
 }
 
 body {
@@ -856,6 +897,80 @@ body.faculty-content-ready main .flex-1 {
   right: 0.75rem;
   width: auto;
   animation: laserPulse 2.4s ease-in-out infinite;
+}
+
+.attendify-share-qr .attendify-qr-host,
+.attendify-share-qr .attendify-qr-wrap {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.attendify-share-qr .attendify-qr-avatar {
+  border-radius: 0.65rem;
+}
+
+.scan-camera-facing-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(0, 0, 0, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.scan-camera-tool-btn {
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.scan-camera-tool-btn:active {
+  transform: scale(0.94);
+}
+
+.scan-camera-tool-btn.is-active {
+  background: rgba(20, 184, 166, 0.55);
+  border-color: rgba(153, 246, 228, 0.45);
+}
+
+.scan-camera-tool-btn .material-symbols-outlined {
+  font-size: 1.35rem;
+  line-height: 1;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
+}
+
+.scan-camera-facing-btn {
+  min-width: 2.65rem;
+  height: 1.85rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.scan-camera-facing-btn.is-active {
+  color: #f0fdfa;
+  background: rgba(13, 148, 136, 0.72);
+  border-color: rgba(153, 246, 228, 0.4);
 }
 
 .scan-camera-shell {
