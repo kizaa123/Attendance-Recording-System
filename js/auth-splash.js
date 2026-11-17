@@ -1,9 +1,7 @@
 (function () {
-  var MIN_LOAD_MS = 520;
-  var TARGET_LOAD_MS = 780;
-  var MAX_LOAD_MS = 1400;
-  var HOLD_AT_FULL_MS = 100;
-  var FADE_OUT_MS = 140;
+  var FILL_MS = 1900;
+  var HOLD_AT_FULL_MS = 320;
+  var FADE_OUT_MS = 200;
 
   function loginUrl() {
     if (window.AttendifyAuthEntry && AttendifyAuthEntry.loginAfterSplashHref) {
@@ -26,38 +24,27 @@
     return;
   }
 
-  var splashParams = new URLSearchParams(window.location.search || "");
-  var fromPwa = splashParams.get("from") === "pwa";
-  if (fromPwa) {
-    try {
-      if (sessionStorage.getItem("attendify_splash_seen") === "1") {
-        skipToLogin();
-        return;
-      }
-      sessionStorage.setItem("attendify_splash_seen", "1");
-    } catch (e) {}
-  }
+  try {
+    sessionStorage.removeItem("attendify_splash_seen");
+  } catch (e) {}
 
   var splash = document.getElementById("auth-splash");
   var fill = splash ? splash.querySelector(".auth-splash__bar-fill") : null;
   var bar = splash ? splash.querySelector(".auth-splash__bar") : null;
   var title = splash ? splash.querySelector(".auth-splash__title") : null;
   var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var targetMs = reducedMotion ? 700 : fromPwa ? TARGET_LOAD_MS : 920;
-  var minMs = reducedMotion ? 400 : MIN_LOAD_MS;
-  var maxMs = reducedMotion ? 900 : MAX_LOAD_MS;
-  var holdMs = reducedMotion ? 80 : HOLD_AT_FULL_MS;
+  var fillMs = reducedMotion ? 1400 : FILL_MS;
+  var holdMs = reducedMotion ? 400 : HOLD_AT_FULL_MS;
   var fadeMs = reducedMotion ? 0 : FADE_OUT_MS;
 
   try {
-    document.documentElement.style.setProperty("--auth-splash-duration-mobile", targetMs + "ms");
+    document.documentElement.style.setProperty("--auth-splash-duration-mobile", fillMs + "ms");
     document.documentElement.style.setProperty("--auth-splash-fade-ms", fadeMs + "ms");
   } catch (e) {}
 
-  if (fromPwa && splash) splash.classList.add("auth-splash--pwa");
-
   function goLogin() {
     try {
+      var splashParams = new URLSearchParams(window.location.search || "");
       sessionStorage.setItem(
         "attendify_auth_mode",
         splashParams.get("mode") === "signup" ? "signup" : "signin"
@@ -82,50 +69,21 @@
   splash.classList.add("auth-splash--visible", "auth-splash--loading");
   if (title) title.classList.add("auth-splash__title--loading");
 
-  var loginTarget = loginUrl();
-  var preload = fetch(loginTarget, { credentials: "same-origin", cache: "no-store" }).catch(function () {
-    return null;
-  });
-
   var start = Date.now();
-  var finished = false;
-
   function tick() {
-    if (finished) return;
     var elapsed = Date.now() - start;
-    var pct = Math.min(100, (elapsed / targetMs) * 100);
+    var pct = Math.min(100, (elapsed / fillMs) * 100);
     setProgress(pct);
-    if (elapsed < maxMs + holdMs) window.requestAnimationFrame(tick);
+    if (elapsed < fillMs + holdMs) window.requestAnimationFrame(tick);
   }
   window.requestAnimationFrame(tick);
 
-  function finishSplash() {
-    if (finished) return;
-    finished = true;
+  window.setTimeout(function () {
     setProgress(100);
     splash.classList.remove("auth-splash--loading");
     if (title) title.classList.remove("auth-splash__title--loading");
     splash.classList.add("auth-splash--hide");
     splash.setAttribute("aria-busy", "false");
-    window.setTimeout(goLogin, Math.max(fadeMs, 90));
-  }
-
-  Promise.all([
-    preload,
-    new Promise(function (resolve) {
-      window.setTimeout(resolve, minMs);
-    })
-  ])
-    .then(function () {
-      var elapsed = Date.now() - start;
-      var wait = Math.max(0, Math.min(targetMs, maxMs) - elapsed);
-      window.setTimeout(finishSplash, wait + holdMs);
-    })
-    .catch(function () {
-      window.setTimeout(finishSplash, holdMs);
-    });
-
-  window.setTimeout(function () {
-    finishSplash();
-  }, maxMs + holdMs + 120);
+    window.setTimeout(goLogin, Math.max(fadeMs, 120));
+  }, fillMs + holdMs);
 })();

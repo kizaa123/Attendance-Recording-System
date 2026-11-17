@@ -15,15 +15,21 @@
   <title>Attendify</title>
   <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-  <link rel="stylesheet" href="css/auth.css?v=47">
-  <link rel="preload" href="login.html" as="document">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/auth.css?v=48">
   <link rel="prefetch" href="login.html">
 </head>
 <body class="auth-splash-page h-full antialiased font-sans">
   <div id="auth-splash" class="auth-splash auth-splash--standalone" role="dialog" aria-modal="true" aria-labelledby="auth-splash-title" aria-busy="true">
     <div class="auth-splash__frame">
       <div class="auth-splash__brand">
-        <img src="/icons/icon-192.svg?v=2" alt="" class="auth-splash__app-icon" width="76" height="76" decoding="async" fetchpriority="high">
+        <div class="auth-brand-logo-mark auth-brand-logo-mark--splash" aria-hidden="true">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+        </div>
         <h1 id="auth-splash-title" class="auth-splash__title" aria-live="polite">Attendify</h1>
         <p class="auth-splash__tagline">Scan <span aria-hidden="true">•</span> Attend <span aria-hidden="true">•</span> Succeed</p>
       </div>
@@ -50,6 +56,6 @@
   <script src="/js/mobile-app.js?v=3"></script>
   <script src="/js/page-transitions.js?v=1"></script>
   <script src="/js/auth-entry.js?v=2"></script>
-  <script src="js/auth-splash.js?v=7"></script>
+  <script src="js/auth-splash.js?v=8"></script>
 </body>
 </html>
