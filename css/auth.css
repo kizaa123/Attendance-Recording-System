@@ -1,5 +1,21 @@
 /* Auth — matches faculty portal (brand-900 + tealAccent) */
 
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.auth-page button,
+body.auth-page a,
+body.auth-page input,
+body.auth-page select,
+body.auth-page textarea,
+body.auth-page label,
+body.auth-splash-page button,
+body.auth-splash-page a {
+  -webkit-tap-highlight-color: transparent;
+  tap-highlight-color: transparent;
+}
+
 /* Mobile-only opening screen (splash.html) — desktop skips via auth-splash.js */
 :root {
   --auth-splash-duration-mobile: 3200ms;
