@@ -1,7 +1,7 @@
 (function () {
-  var FILL_MS = 3200;
-  var HOLD_AT_FULL_MS = 1100;
-  var FADE_OUT_MS = 560;
+  var FILL_MS = 1900;
+  var HOLD_AT_FULL_MS = 320;
+  var FADE_OUT_MS = 200;
 
   function loginUrl() {
     if (window.AttendifyAuthEntry && AttendifyAuthEntry.loginAfterSplashHref) {
@@ -78,6 +78,6 @@
       splash.classList.add("auth-splash--hide");
       splash.setAttribute("aria-busy", "false");
     }
-    window.setTimeout(goLogin, fadeMs + 40);
+    window.setTimeout(goLogin, Math.max(fadeMs, 120));
   }, fillMs + holdMs);
 })();

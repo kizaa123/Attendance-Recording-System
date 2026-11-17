@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <base href="/">
+  <meta name="theme-color" content="#101627">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <title>Install Attendify</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/auth.css?v=37">
+  <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+</head>
+<body class="min-h-full bg-[#101627] text-white antialiased px-4 py-10">
+  <div class="max-w-md mx-auto space-y-6">
+    <header class="text-center">
+      <img src="/icons/icon-192.svg" alt="" class="w-20 h-20 mx-auto mb-4" width="80" height="80">
+      <h1 class="text-2xl font-black">Install Attendify</h1>
+      <p class="text-teal-300 text-sm mt-2">Same app on your phone. Data stays on your Render server (one shared database).</p>
+    </header>
+
+    <div class="bg-white/10 rounded-2xl p-5 space-y-4 text-sm">
+      <section>
+        <h2 class="font-bold text-teal-200 mb-2">Android (Chrome)</h2>
+        <ol class="list-decimal list-inside text-slate-200 space-y-1">
+          <li>Open your Attendify site on Render in Chrome.</li>
+          <li>Tap <strong>Install Attendify</strong> below, or Menu → <strong>Install app</strong> / <strong>Add to Home screen</strong>.</li>
+        </ol>
+      </section>
+      <section>
+        <h2 class="font-bold text-teal-200 mb-2">iPhone (Safari)</h2>
+        <ol class="list-decimal list-inside text-slate-200 space-y-1">
+          <li>Open the site in <strong>Safari</strong> (not Chrome).</li>
+          <li>Tap Share → <strong>Add to Home Screen</strong> → Add.</li>
+        </ol>
+      </section>
+      <section>
+        <h2 class="font-bold text-teal-200 mb-2">Native app (Play Store / App Store)</h2>
+        <p class="text-slate-300">Use the Capacitor project in this repo. See <code class="text-teal-200">docs/MOBILE-APP.md</code>. The app opens your Render URL; no second database.</p>
+      </section>
+    </div>
+
+    <button type="button" id="btn-pwa-install" class="hidden w-full py-3.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-[#101627] font-bold text-sm shadow-lg">
+      Install Attendify
+    </button>
+    <a href="/splash.html" class="block w-full py-3.5 rounded-xl border border-white/20 text-center font-semibold text-sm text-white/90">Open Attendify</a>
+  </div>
+  <script src="/js/mobile-app.js?v=1"></script>
+  <script>
+    var btn = document.getElementById("btn-pwa-install");
+    if (btn) {
+      btn.addEventListener("click", function () {
+        if (window.AttendifyMobileApp) AttendifyMobileApp.promptInstall();
+      });
+      setTimeout(function () {
+        if (!btn.classList.contains("hidden")) return;
+        btn.textContent = "Install from browser menu";
+        btn.classList.remove("hidden");
+      }, 1200);
+    }
+  </script>
+</body>
+</html>

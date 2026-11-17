@@ -7,6 +7,11 @@
   ],
   "scripts": {
     "start": "node server.js",
+    "cap:config": "node scripts/set-capacitor-server.js",
+    "cap:sync": "npx cap sync",
+    "cap:android": "npx cap open android",
+    "cap:ios": "npx cap open ios",
+    "mobile:install-help": "node -e \"console.log('Open /install.html on your phone after deploy')\"",
     "serve": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/attendify-serve.ps1",
     "serve:bg": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/attendify-start-background.ps1",
     "serve:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/attendify-stop.ps1",
@@ -27,6 +32,10 @@
     "esbuild@0.28.2": true
   },
   "devDependencies": {
+    "@capacitor/android": "^7.2.0",
+    "@capacitor/cli": "^7.2.0",
+    "@capacitor/core": "^7.2.0",
+    "@capacitor/ios": "^7.2.0",
     "selfsigned": "^5.5.0"
   }
 }

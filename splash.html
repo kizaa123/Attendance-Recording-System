@@ -4,38 +4,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#101627">
+  <base href="/">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Attendify">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <title>Attendify</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23101627'%3E%3Cpath stroke='%2314b8a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'/%3E%3C/svg%3E">
+  <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/auth.css?v=37">
+  <link rel="stylesheet" href="css/auth.css?v=43">
+  <link rel="prefetch" href="login.html">
 </head>
 <body class="auth-splash-page h-full antialiased font-sans">
   <div id="auth-splash" class="auth-splash auth-splash--standalone" role="dialog" aria-modal="true" aria-labelledby="auth-splash-title" aria-busy="true">
     <div class="auth-splash__frame">
       <div class="auth-splash__brand">
-        <div class="auth-splash__logo" aria-hidden="true">
-          <svg viewBox="0 0 64 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 26L32 14L56 26L32 38L8 26Z" fill="#14b8a6" stroke="#5eead4" stroke-width="1.2" stroke-linejoin="round"/>
-            <path d="M56 26V38" stroke="#5eead4" stroke-width="1.5" stroke-linecap="round"/>
-            <rect x="18" y="40" width="28" height="26" rx="6" fill="#0d9488"/>
-            <path d="M28 52L34 58L46 46" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <div class="auth-brand-logo-mark auth-brand-logo-mark--splash" aria-hidden="true">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
           </svg>
         </div>
         <h1 id="auth-splash-title" class="auth-splash__title">Attendify</h1>
         <p class="auth-splash__tagline">Scan <span aria-hidden="true">•</span> Attend <span aria-hidden="true">•</span> Succeed</p>
       </div>
       <div class="auth-splash__transition" aria-hidden="true">
-        <svg class="auth-splash__curve" viewBox="0 0 400 200" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-          <path fill="#101627" d="M0,0 H400 V0 H0 Z"/>
-          <path fill="#14b8a6" d="M0,52 C55,128 155,44 248,96 C310,132 355,102 400,118 V200 H0 Z"/>
-          <path fill="#0d9488" d="M0,68 C70,148 175,58 265,108 C318,138 362,118 400,130 V200 H0 Z" opacity="0.92"/>
-          <path fill="none" stroke="#5eead4" stroke-width="2.25" stroke-linecap="round" opacity="0.75" d="M-8,78 C95,158 205,62 305,112 C345,132 378,118 408,126"/>
-          <path fill="none" stroke="#99f6e4" stroke-width="1.35" stroke-linecap="round" opacity="0.55" d="M-12,95 C88,172 198,78 298,128 C338,148 372,132 412,140"/>
+        <svg class="auth-splash__curve" viewBox="0 0 1440 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#101627" d="M0,0 h1440 v24 H0z"/>
+          <path fill="#101627" d="M0,22 C320,108 520,8 720,58 C920,108 1120,32 1440,48 V120 H0Z"/>
+          <path fill="none" stroke="#14b8a6" stroke-width="3" stroke-linecap="round" opacity="0.45" d="M0,36 C300,96 560,20 720,52 C900,92 1140,34 1440,56"/>
         </svg>
       </div>
-      <div class="auth-splash__media" aria-hidden="true"></div>
+      <div class="auth-splash__media-shell" aria-hidden="true">
+        <div class="auth-splash__media"></div>
+      </div>
       <div class="auth-splash__bar-wrap">
         <div class="auth-splash__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Loading">
           <span class="auth-splash__bar-fill"></span>
@@ -46,8 +52,9 @@
       </div>
     </div>
   </div>
-  <script src="js/page-transitions.js?v=1"></script>
-  <script src="js/auth-entry.js?v=2"></script>
-  <script src="js/auth-splash.js?v=5"></script>
+  <script src="/js/mobile-app.js?v=1"></script>
+  <script src="/js/page-transitions.js?v=1"></script>
+  <script src="/js/auth-entry.js?v=2"></script>
+  <script src="js/auth-splash.js?v=6"></script>
 </body>
 </html>

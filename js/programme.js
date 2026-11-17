@@ -69,11 +69,11 @@ function renderRoster() {
   });
 
   var title = course.name;
-  if (levelFilter) title += " — Level " + levelFilter;
+  if (levelFilter) title += " · Level " + levelFilter;
   document.getElementById("programme-page-title").textContent = title;
   var codeLine = course.code + (levelFilter ? " · L" + levelFilter : "");
   document.getElementById("programme-page-code").textContent = codeLine;
-  document.title = "Attendify — " + course.code;
+  document.title = "Attendify | " + course.code;
 
   var shareLevel = levelFilter || (course.teachLevel != null ? course.teachLevel : "");
   var url = Attendify.enrollUrl(classId, shareLevel);
@@ -91,7 +91,7 @@ function renderRoster() {
 
   document.getElementById("roster-count").textContent = "Showing " + students.length + " of " + all.length;
   document.getElementById("roster-range").textContent =
-    all.length ? all.length + " registered — used for all courses under this programme" : "No registrations yet";
+    all.length ? all.length + " registered, used for all courses under this programme" : "No registrations yet";
 
   if (!students.length) {
     rosterBody.innerHTML =
@@ -124,13 +124,13 @@ function renderRoster() {
         esc(student.name) +
         "</div>" +
         '<div class="text-xs text-slate-500">' +
-        esc(student.email || "—") +
+        esc(student.email || "…") +
         "</div></div></div></td>" +
         '<td class="student-roster-index py-4 px-6 font-mono text-xs font-bold text-slate-800">' +
         esc(student.index) +
         "</td>" +
         '<td class="student-roster-level py-4 px-6 text-xs font-bold text-slate-600">' +
-        (student.level ? "L" + esc(String(student.level)) : "—") +
+        (student.level ? "L" + esc(String(student.level)) : "…") +
         "</td>" +
         '<td class="student-roster-actions py-4 px-6 text-right">' +
         '<div class="flex items-center justify-end gap-1">' +
@@ -223,7 +223,7 @@ function showQr(student, options) {
   }
   document.getElementById("qr-name").textContent = student.name;
   document.getElementById("qr-index").textContent = student.index;
-  document.getElementById("qr-course").textContent = course.code + " — " + course.name;
+  document.getElementById("qr-course").textContent = course.code + " · " + course.name;
   qrModal.classList.remove("hidden");
   Attendify.drawQr(
     document.getElementById("qr-holder"),
@@ -273,7 +273,7 @@ document.getElementById("add-form").addEventListener("submit", function (event) 
       addSavePending = false;
       var levelNote =
         levelFilter && onRoster.level != null && Number(onRoster.level) !== Number(levelFilter)
-          ? " (registered at level " + onRoster.level + " — clear the level filter or search the roster)"
+          ? " (registered at level " + onRoster.level + ". Clear the level filter or search the roster.)"
           : "";
       document.getElementById("add-error").textContent =
         "That index is already on this programme" + levelNote + ". Use Edit on their row to change details, or QR for their card.";
@@ -382,7 +382,7 @@ document.getElementById("btn-export-roster").addEventListener("click", function 
     rows.push([
       student.name,
       student.index,
-      Attendify.formatStudentLevel ? Attendify.formatStudentLevel(student) : student.level || "—",
+      Attendify.formatStudentLevel ? Attendify.formatStudentLevel(student) : student.level || "…",
       student.email,
       course.code
     ]);

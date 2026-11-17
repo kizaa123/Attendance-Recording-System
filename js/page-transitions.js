@@ -3,21 +3,32 @@
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
+  function comingFromSplash() {
+    try {
+      if (sessionStorage.getItem("attendify_enter_anim") === "splash") return true;
+    } catch (e) {}
+    try {
+      if (new URLSearchParams(window.location.search || "").get("from") === "splash") return true;
+    } catch (e2) {}
+    return false;
+  }
+
   function applyStoredEnter() {
     var kind = "";
     try {
       kind = sessionStorage.getItem("attendify_enter_anim") || "";
     } catch (e) {}
+    if (!kind && comingFromSplash()) kind = "splash";
     if (!kind) return;
     try {
       sessionStorage.removeItem("attendify_enter_anim");
     } catch (e2) {}
-    if (reducedMotion()) return;
     if (kind === "splash" && document.body && document.body.classList.contains("auth-page")) {
       document.body.classList.add("auth-enter-from-splash");
+      if (!reducedMotion()) document.body.classList.add("auth-enter-from-splash--motion");
     }
     if (kind === "portal" && document.body) {
-      document.body.classList.add("faculty-page-enter");
+      if (!reducedMotion()) document.body.classList.add("faculty-page-enter");
     }
   }
 

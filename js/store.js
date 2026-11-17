@@ -248,7 +248,7 @@
 
   function courseLectureLabel(course) {
     if (!course) return "";
-    return String(course.code || "").trim() + " — " + String(course.name || "").trim();
+    return String(course.code || "").trim() + " · " + String(course.name || "").trim();
   }
 
   function coursesForProgramme(classId) {
@@ -522,7 +522,7 @@
       studentOrLevel != null && typeof studentOrLevel === "object"
         ? studentOrLevel.level
         : studentOrLevel;
-    if (lv == null || lv === "") return "—";
+    if (lv == null || lv === "") return "…";
     return "L" + String(lv);
   }
 
@@ -541,11 +541,11 @@
           "</td><td>" +
           htmlText(row.index) +
           "</td><td>" +
-          htmlText(row.level != null ? row.level : "—") +
+          htmlText(row.level != null ? row.level : "…") +
           "</td><td>" +
           htmlText(row.status) +
           "</td><td>" +
-          htmlText(row.time || "—") +
+          htmlText(row.time || "…") +
           "</td></tr>"
         );
       })
@@ -761,7 +761,7 @@
       return { ok: false, error: "No registered student with index ending in " + suffix + "." };
     }
     if (matches.length > 1) {
-      return { ok: false, error: "More than one student matches — scan the QR or use the full index." };
+      return { ok: false, error: "More than one student matches. Scan the QR or use the full index." };
     }
     return { ok: true, student: matches[0], index: matches[0].index };
   }
@@ -1090,7 +1090,7 @@
 
   function enrollShareSummary(course, level) {
     if (!course) return "Student registration for this programme";
-    var label = (course.code || "") + (course.code && course.name ? " — " : "") + (course.name || "");
+    var label = (course.code || "") + (course.code && course.name ? " · " : "") + (course.name || "");
     label = label.trim() || "this programme";
     var lvl = level != null && level !== "" ? Number(level) : null;
     if (lvl != null && !isNaN(lvl)) {
@@ -1239,7 +1239,7 @@
               imgEl.classList.add("hidden");
             }
             if (statusEl) {
-              statusEl.textContent = "No photo found for this index — you can still register.";
+              statusEl.textContent = "No photo found for this index. You can still register.";
             }
             if (options.hidePlaceholder && imgEl) options.hidePlaceholder(true);
           }
@@ -1446,7 +1446,7 @@
   }
 
   function formatTime(iso) {
-    if (!iso) return "—";
+    if (!iso) return "…";
     try {
       return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
     } catch (_) {

@@ -26,7 +26,7 @@ function applyEnrollLevel(level) {
 function setIntro(course) {
   var intro = document.getElementById("enroll-intro");
   if (!intro || !course) return;
-  var label = (course.code ? course.code + " — " : "") + (course.name || "this programme");
+  var label = (course.code ? course.code + " · " : "") + (course.name || "this programme");
   intro.innerHTML =
     'Register for <strong class="text-slate-800">' +
     label +
@@ -111,7 +111,7 @@ function loadProfilePhoto(index) {
       el.img.classList.add("hidden");
       updatePhotoPlaceholder(true);
       if (el.status) {
-        el.status.textContent = "No photo found for this index — you can still register.";
+        el.status.textContent = "No photo found for this index. You can still register.";
       }
     };
     el.img.src = photoUrl + (photoUrl.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();

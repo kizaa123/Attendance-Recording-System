@@ -1,9 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="home-page">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Attendify</title>
+  <meta name="description" content="Attendify QR attendance for University of Cape Coast. Register once, scan every lecture, share scanners with TAs.">
+  <base href="/">
+  <title>Attendify | How it works | UCC Attendance</title>
+  <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/home.css?v=2.7">
   <script src="js/auth-entry.js?v=2"></script>
   <script>
     (function () {
@@ -12,17 +20,164 @@
       var programme = params.get("programme") || params.get("class");
       if (programme) {
         window.location.replace("programme.html?programme=" + encodeURIComponent(programme));
-        return;
       }
-      if (window.AttendifyAuthEntry) {
-        window.location.replace(AttendifyAuthEntry.signInEntryHref(q));
-        return;
-      }
-      window.location.replace("login.html" + q);
     })();
   </script>
 </head>
-<body>
-  <p><a href="dashboard.html">Go to dashboard</a></p>
+<body class="home-page">
+  <header class="home-nav">
+    <div class="home-nav__inner">
+      <a class="home-brand" href="index.html">
+        <span class="home-brand__mark" aria-hidden="true">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        </span>
+        <span class="home-brand__text">Attendify</span>
+      </a>
+      <nav class="home-nav__links" aria-label="Primary">
+        <a href="#how-it-works">How it works</a>
+        <a href="#activities">Activities</a>
+        <a href="install.html">Install app</a>
+        <a class="home-btn home-btn--primary" href="#" data-href-signin>Open system</a>
+      </nav>
+      <button type="button" class="home-nav__toggle" id="home-nav-toggle" aria-expanded="false" aria-controls="home-nav-panel" aria-label="Open menu">
+        <span class="home-nav__toggle-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+      </button>
+    </div>
+    <div class="home-nav__panel" id="home-nav-panel">
+      <a href="#how-it-works">How it works</a>
+      <a href="#activities">Activities</a>
+      <a href="install.html">Install app</a>
+      <a class="home-btn home-btn--primary" href="#" data-href-signin>Open Attendify</a>
+    </div>
+  </header>
+
+  <section class="home-hero" aria-labelledby="home-hero-title">
+    <div class="home-hero__bg" aria-hidden="true"></div>
+    <div class="home-hero__inner">
+      <div class="home-hero__copy">
+        <div class="home-hero__head">
+          <p class="home-hero__badge">
+            <span class="home-hero__badge-dot" aria-hidden="true"></span>
+            University of Cape Coast
+          </p>
+          <h1 id="home-hero-title" class="home-hero__title">
+            <span class="home-hero__line">One QR.</span>
+            <span class="home-hero__line"><span class="home-hero__highlight">Every lecture.</span></span>
+            <span class="home-hero__line home-hero__line--last">Trusted attendance.</span>
+          </h1>
+        </div>
+        <p class="home-hero__lead">
+          Students register once and keep a personal QR pass. Lecturers open a live session, scan in seconds, and export weekly sheets with optional TA scanners on shared links.
+        </p>
+        <div class="home-hero__actions">
+          <a class="home-btn home-btn--primary" href="#" data-href-signin>Lecturer sign in</a>
+          <a class="home-btn home-btn--ghost" href="install.html">Install on phone</a>
+        </div>
+      </div>
+      <figure class="home-hero__showcase">
+        <img
+          class="home-hero__showcase-img"
+          src="assets/hero-laptop-phone-dashboard.png"
+          alt="Attendify dashboard on a laptop and splash screen on a phone"
+          width="1200"
+          height="800"
+          loading="eager"
+          decoding="async"
+        >
+      </figure>
+    </div>
+  </section>
+
+  <section class="home-section" id="how-it-works" aria-labelledby="home-flow-title">
+    <header class="home-section__head" data-reveal>
+      <h2 id="home-flow-title">How Attendify works</h2>
+      <p>Four steps from registration to audit-ready attendance, without typing every name by hand.</p>
+    </header>
+    <div class="home-flow">
+      <article class="home-flow__step" data-reveal>
+        <span class="home-flow__num" aria-hidden="true">1</span>
+        <h3>Lecturer sets up</h3>
+        <p>Create a programme, add courses, and share a registration link with students.</p>
+      </article>
+      <article class="home-flow__step" data-reveal style="transition-delay: 0.06s">
+        <span class="home-flow__num" aria-hidden="true">2</span>
+        <h3>Students enroll</h3>
+        <p>They confirm index, photo, and download a permanent QR attendance card.</p>
+      </article>
+      <article class="home-flow__step" data-reveal style="transition-delay: 0.12s">
+        <span class="home-flow__num" aria-hidden="true">3</span>
+        <h3>Live session scan</h3>
+        <p>Start attendance, scan QR codes (or manual suffix), see photos instantly.</p>
+      </article>
+      <article class="home-flow__step" data-reveal style="transition-delay: 0.18s">
+        <span class="home-flow__num" aria-hidden="true">4</span>
+        <h3>Reports &amp; export</h3>
+        <p>Week-by-week grids, duplicate protection, and CSV for faculty records.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="home-section" id="activities" aria-labelledby="home-activities-title">
+    <header class="home-section__head" data-reveal>
+      <h2 id="home-activities-title">Every activity in the system</h2>
+      <p>Core flows at a glance. Open the app when you are ready.</p>
+    </header>
+    <div class="home-cards">
+      <article class="home-card" data-reveal>
+        <div class="home-card__media">
+          <img src="assets/register.jpg" alt="" loading="lazy">
+          <span class="home-card__icon" aria-hidden="true">1</span>
+        </div>
+        <div class="home-card__body">
+          <h3>Student registration</h3>
+          <p>Enroll via lecturer link. Profile photo loads from index; one QR works for all courses in the programme.</p>
+        </div>
+      </article>
+      <article class="home-card" data-reveal style="transition-delay: 0.05s">
+        <div class="home-card__media">
+          <img src="assets/login-page-image.avif" alt="" loading="lazy">
+          <span class="home-card__icon">2</span>
+        </div>
+        <div class="home-card__body">
+          <h3>QR attendance card</h3>
+          <p>Encrypted token in the QR. No course data exposed. Optional photo in the center of the card.</p>
+        </div>
+      </article>
+      <article class="home-card" data-reveal style="transition-delay: 0.08s">
+        <div class="home-card__media">
+          <img src="assets/livesection.jpg" alt="" loading="lazy">
+          <span class="home-card__icon">3</span>
+        </div>
+        <div class="home-card__body">
+          <h3>Start live session</h3>
+          <p>Pick week and lecture; HUD scans with sounds for present, duplicate, or error.</p>
+        </div>
+      </article>
+      <article class="home-card" data-reveal style="transition-delay: 0.12s">
+        <div class="home-card__media">
+          <img src="assets/Powerful-Analytics-and-Reports.jpg" alt="" loading="lazy">
+          <span class="home-card__icon">4</span>
+        </div>
+        <div class="home-card__body">
+          <h3>Weekly reports</h3>
+          <p>Semester grid and CSV export for department audits.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="home-cta" data-reveal>
+    <h2>Ready to take attendance?</h2>
+    <p>Sign in as a lecturer, or ask your coordinator for a student registration link.</p>
+    <a class="home-btn home-btn--primary" href="#" data-href-signin>Open Attendify</a>
+  </section>
+
+  <footer class="home-footer">
+    <img src="assets/ucc-logo-hero.png" alt="University of Cape Coast">
+    <p>Attendify, Automated Attendance Recording System, Cape Coast, Ghana</p>
+    <p><a href="login.html" style="color:#5eead4;font-weight:600">Direct login</a> · <a href="install.html" style="color:#94a3b8">Install</a></p>
+  </footer>
+
+  <script src="js/home.js?v=2"></script>
 </body>
 </html>

@@ -3,21 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="js/page-transitions.js?v=1"></script>
+  <base href="/">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#101627">
+  <script src="js/auth-splash-bridge.js?v=1"></script>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Attendify">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+  <script src="js/page-transitions.js?v=2"></script>
   <script src="js/auth-entry.js?v=2"></script>
   <script>
     try {
       if (window.AttendifyAuthEntry) AttendifyAuthEntry.gateLoginToSplash();
     } catch (e) {}
   </script>
-  <title>Attendify — Automated Attendance Recording System | UCC</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23101627'%3E%3Cpath stroke='%2314b8a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'/%3E%3C/svg%3E">
+  <title>Attendify | Automated Attendance Recording System | UCC</title>
+  <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/tailwind-dashboard.js"></script>
-  <link rel="stylesheet" href="css/auth.css?v=37">
+  <link rel="stylesheet" href="css/auth.css?v=44">
   <style>
     .swoop-accent {
       position: absolute;
@@ -39,7 +48,30 @@
     }
   </style>
 </head>
-<body class="auth-page h-full bg-[#f8fafc] text-slate-800 antialiased flex flex-col lg:flex-row overflow-x-hidden font-sans">
+<body class="auth-page h-full text-slate-800 antialiased flex flex-col lg:flex-row overflow-x-hidden font-sans">
+  <div id="auth-desktop-loader" class="auth-desktop-loader" aria-hidden="true" hidden><span></span></div>
+  <script>
+    (function () {
+      if (window.matchMedia("(min-width: 1024px)").matches) {
+        var el = document.getElementById("auth-desktop-loader");
+        if (el) el.removeAttribute("hidden");
+      }
+    })();
+  </script>
+  <script>
+    (function () {
+      try {
+        var from =
+          new URLSearchParams(location.search).get("from") === "splash" ||
+          sessionStorage.getItem("attendify_enter_anim") === "splash";
+        if (!from) return;
+        document.body.classList.add("auth-enter-from-splash");
+        if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          document.body.classList.add("auth-enter-from-splash--motion");
+        }
+      } catch (_) {}
+    })();
+  </script>
 
   <!-- ========================================================================= -->
   <!-- LEFT COLUMN: Campus Photo + Transparent Blue Overlay + System Title & Features -->
@@ -51,7 +83,7 @@
       <div class="flex items-start gap-4">
         <div class="pt-0.5">
           <div class="auth-hero-title-wrap">
-            <div class="auth-hero-title-logo" aria-hidden="true">
+            <div class="auth-hero-title-logo auth-brand-logo-mark" aria-hidden="true">
               <svg class="text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
@@ -70,7 +102,7 @@
       </div>
     </div>
 
-    <!-- Watermark Logo of Attendify — centered on hero -->
+    <!-- Watermark Logo of Attendify, centered on hero -->
     <div class="absolute inset-0 flex items-center justify-center pointer-events-none select-none text-white z-0">
       <svg class="w-[min(22rem,70vw)] h-[min(22rem,70vw)] sm:w-96 sm:h-96 opacity-[0.045]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -167,7 +199,7 @@
           <div class="auth-form-logo-mark auth-form-logo-mark--ucc">
             <img src="assets/ucc-logo-hero.png?v=2" alt="University of Cape Coast" class="auth-form-crest">
           </div>
-          <div class="auth-form-logo-mark auth-form-logo-mark--app" aria-hidden="true">
+          <div class="auth-form-logo-mark auth-form-logo-mark--app auth-brand-logo-mark" aria-hidden="true">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
@@ -177,6 +209,7 @@
           University of Cape Coast <span class="text-tealAccent-600">Attendify</span>
         </h1>
         <p class="text-[11px] text-slate-500 font-medium mt-1.5">Student attendance system</p>
+        <p class="text-[11px] mt-2"><a href="index.html" class="text-tealAccent-600 font-semibold hover:text-tealAccent-700 transition">How the system works</a></p>
       </header>
 
       <div class="flex p-1 bg-slate-100 rounded-xl border border-slate-200/80">
@@ -348,6 +381,9 @@
   </main>
 
   <script src="js/store.js?v=39"></script>
+  <script src="/js/mobile-app.js?v=1"></script>
+  <script src="js/auth-mobile-enter.js?v=1"></script>
+  <script src="js/auth-desktop-enter.js?v=1"></script>
   <script src="js/auth-page.js?v=18"></script>
 </body>
 </html>

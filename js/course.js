@@ -71,7 +71,7 @@
     if (scanned) return "Present";
     if (isWeekClosed(week)) return "Absent";
     if (sessionHasRecords(week)) return "Waiting";
-    return "—";
+    return "…";
   }
 
   function sessionBadgeKind(scanned, week) {
@@ -97,7 +97,7 @@
     if (sessionHasRecords(week)) {
       return '<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 shadow-xs">Waiting…</span>';
     }
-    return '<span class="text-slate-400">—</span>';
+    return '<span class="text-slate-400">…</span>';
   }
 
   function rosterUsesSessionCards(week) {
@@ -161,7 +161,7 @@
     var el = document.getElementById("course-week-banner");
     if (!el) return;
     if (isSelectedWeekClosed()) {
-      el.textContent = "Week " + selectedWeek + " — session ended. Unscanned students are marked absent.";
+      el.textContent = "Week " + selectedWeek + ": session ended. Unscanned students are marked absent.";
       el.classList.add("text-slate-700", "bg-slate-100", "border-slate-300");
       el.classList.remove("text-amber-800", "bg-amber-50", "border-amber-100", "text-slate-600", "bg-slate-50", "border-slate-200");
       return;
@@ -184,7 +184,7 @@
       el.classList.add("text-amber-800", "bg-amber-50", "border-amber-100");
       el.classList.remove("text-slate-600", "bg-slate-50", "border-slate-200");
     } else {
-      el.textContent = "Week " + selectedWeek + " — attendance not started yet.";
+      el.textContent = "Week " + selectedWeek + ": attendance not started yet.";
       el.classList.add("text-slate-600", "bg-slate-50", "border-slate-200");
     }
   }
@@ -208,7 +208,7 @@
         index: student.index,
         level: Attendify.formatStudentLevel(student),
         status: statusLabelForExport(scanned, selectedWeek),
-        time: scanned ? Attendify.formatTime(scanned) : "—"
+        time: scanned ? Attendify.formatTime(scanned) : "…"
       };
     });
   }
@@ -236,7 +236,7 @@
       return;
     }
     Attendify.printAttendanceReport({
-      title: pair.course.code + " — " + pair.course.name,
+      title: pair.course.code + " · " + pair.course.name,
       subtitle:
         pair.programme.code +
         " · Week " +
@@ -261,11 +261,11 @@
       return false;
     }
     document.getElementById("course-programme-label").textContent =
-      pair.programme.code + " — " + pair.programme.name;
+      pair.programme.code + " · " + pair.programme.name;
     document.getElementById("course-title").textContent = pair.course.name;
     document.getElementById("course-code-line").textContent = pair.course.code;
     lectureLabel = Attendify.courseLectureLabel(pair.course);
-    document.title = "Attendify — " + pair.course.code;
+    document.title = "Attendify | " + pair.course.code;
     return true;
   }
 
@@ -311,15 +311,15 @@
       updateAbsentStatCard(false);
       if (scanning && enrolled) {
         document.getElementById("course-stat-present").textContent = String(presentCount);
-        document.getElementById("course-stat-absent").textContent = "—";
-        document.getElementById("course-stat-present-note").textContent = "Week " + selectedWeek + " · scanning";
+        document.getElementById("course-stat-absent").textContent = "…";
+        document.getElementById("course-stat-present-note").textContent = "Week " + selectedWeek + ": scanning";
         document.getElementById("course-stat-absent-note").textContent = "Roster appears after the first scan";
         updateWeekStatCard();
         return;
       }
-      document.getElementById("course-stat-present").textContent = "—";
-      document.getElementById("course-stat-absent").textContent = "—";
-      document.getElementById("course-stat-present-note").textContent = "Week " + selectedWeek + " · not started";
+      document.getElementById("course-stat-present").textContent = "…";
+      document.getElementById("course-stat-absent").textContent = "…";
+      document.getElementById("course-stat-present-note").textContent = "Week " + selectedWeek + ": not started";
       document.getElementById("course-stat-absent-note").textContent = "Take attendance to record this week";
       updateWeekStatCard();
       return;
@@ -331,10 +331,10 @@
       "Week " + selectedWeek + (enrolled ? " · " + Math.round((presentCount / enrolled) * 1000) / 10 + "% turnout" : "");
     document.getElementById("course-stat-absent-note").textContent = sessionActive
       ? enrolled
-        ? "Week " + selectedWeek + " · session open · not scanned yet"
+        ? "Week " + selectedWeek + ": session open, not scanned yet"
         : "No students on programme"
       : enrolled
-        ? "Week " + selectedWeek + " · session ended · absent"
+        ? "Week " + selectedWeek + ": session ended, absent"
         : "No students on programme";
     updateWeekStatCard();
   }
@@ -384,7 +384,7 @@
         var badgeKind = sessionBadgeKind(scanned, selectedWeek);
         var timeCell = scanned
           ? '<span class="font-mono text-slate-700 tabular-nums">' + esc(Attendify.formatTime(scanned)) + "</span>"
-          : '<span class="text-slate-300">—</span>';
+          : '<span class="text-slate-300">…</span>';
         var listUi = window.AttendifyStudentList;
         var mobileBlock;
         if (sessionCards && listUi && listUi.attendanceSessionRosterCard && badgeKind) {
@@ -477,7 +477,13 @@
       return;
     }
     renderLive(selectedWeek);
-    renderTable();
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(function () {
+        renderTable();
+      });
+    } else {
+      renderTable();
+    }
     AttendifyScannerHud.showVerified(result.student, result.record.scannedAt, result.duplicate);
     var undoBtn = document.getElementById("scan-hud-undo");
     if (undoBtn) {
@@ -489,7 +495,8 @@
 
   function onScan(text) {
     var now = Date.now();
-    if (text === lastCode && now - lastScanAt < 550) return;
+    var dedupe = (window.AttendifyScannerHud && AttendifyScannerHud.SCAN_DEDUPE_MS) || 260;
+    if (text === lastCode && now - lastScanAt < dedupe) return;
     lastCode = text;
     lastScanAt = now;
     var parsed = Attendify.parseQr(text);

@@ -41,8 +41,8 @@
     draftLecturer = lecturer;
     var nameEl = document.getElementById("view-full-name");
     var userEl = document.getElementById("view-username");
-    if (nameEl) nameEl.textContent = lecturer.fullName || "—";
-    if (userEl) userEl.textContent = lecturer.username || "—";
+    if (nameEl) nameEl.textContent = lecturer.fullName || "…";
+    if (userEl) userEl.textContent = lecturer.username || "…";
     var editName = document.getElementById("edit-full-name");
     var editUser = document.getElementById("edit-username");
     if (editName) editName.value = lecturer.fullName || "";
@@ -68,7 +68,7 @@
 
   function programmeDisplayLabel(p) {
     if (!p) return "";
-    return (p.code || "") + " — " + (p.name || "");
+    return (p.code || "") + " · " + (p.name || "");
   }
 
   function programmeCardHtml(item, opts) {

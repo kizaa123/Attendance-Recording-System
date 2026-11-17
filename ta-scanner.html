@@ -4,7 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <base href="/">
-  <title>Attendify — TA Scanner</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#101627">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+  <title>Attendify | TA Scanner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -178,7 +182,8 @@
   </script>
   <script src="/js/scan-cache.js?v=1"></script>
   <script src="/js/store.js?v=37"></script>
-  <script src="/js/scanner-hud.js?v=25"></script>
+  <script src="/js/scanner-hud.js?v=26"></script>
+  <script src="/js/mobile-app.js?v=1"></script>
   <script>
   (function () {
     "use strict";
@@ -319,7 +324,7 @@
           if (cached && cached.session) {
             rememberSession({ session: cached.session });
             bootUI();
-            showToast("Offline mode — scans save on this device and sync when online.", "amber");
+            showToast("Offline mode. Scans save on this device and sync when online.", "amber");
             return;
           }
           showError("Could not connect to Attendify. Open the link on the same Wi-Fi using the address your lecturer shared (not localhost).");
@@ -336,7 +341,7 @@
       // Fill header
       document.getElementById("hdr-lecture").textContent = sessionCtx.lectureName || "Attendance Session";
       document.getElementById("hdr-programme").textContent =
-        sessionCtx.programme ? sessionCtx.programme.code + " — " + sessionCtx.programme.name : "";
+        sessionCtx.programme ? sessionCtx.programme.code + " · " + sessionCtx.programme.name : "";
       document.getElementById("hdr-week").textContent = "Week " + (sessionCtx.weekNumber || 1);
 
       // Populate any already-scanned records (from before this TA joined)
@@ -500,7 +505,8 @@
     function onScan(text) {
       if (scanBusy) return;
       var now = Date.now();
-      if (text === lastCode && now - lastScanAt < 600) return;
+      var dedupe = (window.AttendifyScannerHud && AttendifyScannerHud.SCAN_DEDUPE_MS) || 260;
+      if (text === lastCode && now - lastScanAt < dedupe) return;
       lastCode = text;
       lastScanAt = now;
       submitScan(text);
@@ -616,7 +622,7 @@
 
       if (!navigator.onLine) {
         if (Cache) Cache.enqueue(taToken, payload);
-        showToast("Saved on device — will sync when online.", "amber");
+        showToast("Saved on device. Will sync when online.", "amber");
         scanBusy = false;
         return;
       }
@@ -639,11 +645,11 @@
             return;
           }
           if (Cache) Cache.enqueue(taToken, payload);
-          showToast("Slow connection — scan queued to sync.", "amber");
+          showToast("Slow connection. Scan queued to sync.", "amber");
         })
         .catch(function () {
           if (Cache) Cache.enqueue(taToken, payload);
-          showToast("Network error — saved locally, camera still running.", "amber");
+          showToast("Network error. Saved locally; camera still running.", "amber");
         })
         .finally(function () {
           scanBusy = false;

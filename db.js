@@ -134,7 +134,7 @@ function initSchema() {
       lecturer_id TEXT
     );
 
-    /* Unique per lecturer — same programme course code may exist for different teachers */
+    /* Unique per lecturer · same programme course code may exist for different teachers */
     CREATE UNIQUE INDEX IF NOT EXISTS idx_programme_courses_lecturer_code
       ON programme_courses(lecturer_id, class_id, code COLLATE NOCASE);
 
@@ -1653,7 +1653,7 @@ function normalizeLectureName(name) {
 function courseLectureLabel(code, name) {
   const c = String(code || "").trim();
   const n = String(name || "").trim();
-  if (c && n) return c + " — " + n;
+  if (c && n) return c + " · " + n;
   return normalizeLectureName(n || c);
 }
 
@@ -2376,7 +2376,7 @@ function resolveTaToken(token) {
 }
 
 /**
- * GET /api/ta/:token — returns session context for a valid TA token.
+ * GET /api/ta/:token · returns session context for a valid TA token.
  */
 function getTaSession(token) {
   openDb();

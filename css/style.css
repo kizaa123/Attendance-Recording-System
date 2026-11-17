@@ -1509,6 +1509,10 @@ body.faculty-content-ready main .flex-1 {
   background: #f1f5f9;
 }
 
+html.attendify-standalone body {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 .ta-scanner-dialog {
   min-height: 100dvh;
 }

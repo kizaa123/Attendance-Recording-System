@@ -14,7 +14,7 @@
   }
 
   function fmtTime(iso) {
-    if (!iso) return "—";
+    if (!iso) return "…";
     try {
       return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
     } catch (e) {
@@ -23,7 +23,7 @@
   }
 
   function fmtLevel(student) {
-    return Attendify.formatStudentLevel ? Attendify.formatStudentLevel(student) : "—";
+    return Attendify.formatStudentLevel ? Attendify.formatStudentLevel(student) : "…";
   }
 
   function studentPhoto(s) {
@@ -97,7 +97,7 @@
           '"' +
           selected +
           ">" +
-          esc(c.code + " — " + c.name + level) +
+          esc(c.code + " · " + c.name + level) +
           "</option>"
         );
       })
@@ -132,7 +132,7 @@
     sel.innerHTML = courses
       .map(function (c) {
         var selected = c.id === selectedCourseId ? " selected" : "";
-        return '<option value="' + esc(c.id) + '"' + selected + '>' + esc(c.code + " — " + c.name) + "</option>";
+        return '<option value="' + esc(c.id) + '"' + selected + '>' + esc(c.code + " · " + c.name) + "</option>";
       })
       .join("");
   }
@@ -216,7 +216,7 @@
     if (rollCallWeeksTotal <= 0 || presentRollCallWeeks == null) {
       return {
         box: "bg-slate-100 text-slate-600 border-slate-200",
-        label: "—"
+        label: "…"
       };
     }
     var pct = (Number(presentRollCallWeeks) / rollCallWeeksTotal) * 100;
@@ -264,7 +264,7 @@
       (Attendify.coursesForProgramme(selectedClassId) || []).find(function (c) {
         return c.id === selectedCourseId;
       }) || null;
-    var courseLabel = courseObj ? courseObj.code + " — " + courseObj.name : "Select a course";
+    var courseLabel = courseObj ? courseObj.code + " · " + courseObj.name : "Select a course";
     var weekLabel = selectedWeek === "all" ? "All Weeks (aggregate)" : "Week " + selectedWeek;
     var isAggregate = selectedWeek === "all";
 
@@ -281,8 +281,8 @@
       document.getElementById("stat-present").textContent = "0";
       document.getElementById("stat-absent").textContent = "0";
       document.getElementById("stat-rate").textContent = "0.0%";
-      if (presentSub) presentSub.textContent = "—";
-      if (absentSub) absentSub.textContent = "—";
+      if (presentSub) presentSub.textContent = "…";
+      if (absentSub) absentSub.textContent = "…";
       if (rateSub) rateSub.textContent = "Select a course";
       document.getElementById("report-filter-summary").textContent =
         programme.code + levelSuffix + " • " + weekLabel;
@@ -367,7 +367,7 @@
               ? "Waiting"
               : singleWeekClosed || singleWeekHasScans
                 ? "Absent"
-                : "—",
+                : "…",
         aggregateLabel: isAggregate && tier && tier.label ? tier.label : "",
         weekMarksLabel: isAggregate
           ? attendedWeeks + "/" + weeksTakenCount + " present · " + absentInTaken + " absent"
@@ -412,7 +412,7 @@
       }
       if (absentSub) {
         absentSub.textContent =
-          weeksTakenCount > 0 ? "Missed at least one recorded week" : "—";
+          weeksTakenCount > 0 ? "Missed at least one recorded week" : "…";
       }
       if (rateSub) {
         rateSub.textContent =
@@ -443,7 +443,7 @@
         absentCount = 0;
         rate = enrolled > 0 ? ((presentCount / enrolled) * 100).toFixed(1) : "0.0";
         if (presentSub) presentSub.textContent = "No roll call this week yet";
-        if (absentSub) absentSub.textContent = "—";
+        if (absentSub) absentSub.textContent = "…";
       }
       if (rateSub) rateSub.textContent = "Week " + selectedWeek + " of " + semesterWeeks;
     }
@@ -461,7 +461,7 @@
     var printSub = document.getElementById("print-subtitle");
     if (printSub) {
       printSub.textContent =
-        programme.name + " (" + programme.code + ")" + levelSuffix + " — " + courseLabel + " — " + weekLabel;
+        programme.name + " (" + programme.code + ")" + levelSuffix + " · " + courseLabel + " · " + weekLabel;
     }
     var printTime = document.getElementById("print-timestamp");
     if (printTime) {
@@ -492,14 +492,14 @@
         var lastCol;
         if (isAggregate) {
           statusBox = row.miniBoxesHtml
-            ? '<div class="flex items-center gap-0.5 flex-wrap" title="One box per roll-call week — green present, red absent (skipped weeks not shown)">' +
+            ? '<div class="flex items-center gap-0.5 flex-wrap" title="One box per roll-call week. Green present, red absent (skipped weeks not shown).">' +
               row.miniBoxesHtml +
               "</div>"
-            : '<span class="text-slate-400 text-xs">—</span>';
+            : '<span class="text-slate-400 text-xs">…</span>';
           var aggClass =
             row.tier && row.tier.box ? row.tier.box : "bg-slate-100 text-slate-600 border-slate-200";
           var aggLabel =
-            weeksTakenCount > 0 && row.tier && row.tier.label ? row.tier.label : "—";
+            weeksTakenCount > 0 && row.tier && row.tier.label ? row.tier.label : "…";
           lastCol =
             '<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-xs ' +
             aggClass +
@@ -517,11 +517,11 @@
             statusBox =
               '<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-bold text-rose-800 bg-rose-100 border border-rose-300 shadow-xs">Absent ✕</span>';
           } else {
-            statusBox = '<span class="text-slate-400">—</span>';
+            statusBox = '<span class="text-slate-400">…</span>';
           }
           lastCol =
             '<span class="font-mono text-slate-500 text-xs">' +
-            (row.present ? fmtTime(row.scannedAt) : "—") +
+            (row.present ? fmtTime(row.scannedAt) : "…") +
             "</span>";
         }
 
@@ -638,7 +638,7 @@
               r.level,
               r.week,
               r.weekMarksLabel || "",
-              r.aggregateLabel || (r.tier && r.tier.label) || "—"
+              r.aggregateLabel || (r.tier && r.tier.label) || "…"
             ]);
           } else {
             csvRows.push([
@@ -646,7 +646,7 @@
               r.index,
               r.level,
               r.statusLabel || (r.present ? "Present" : "Absent"),
-              r.present ? fmtTime(r.scannedAt) : "—"
+              r.present ? fmtTime(r.scannedAt) : "…"
             ]);
           }
         });
@@ -668,10 +668,10 @@
                 return c.id === selectedCourseId;
               })
             : null;
-        var courseLabel = courseObj ? courseObj.code + " — " + courseObj.name : "";
+        var courseLabel = courseObj ? courseObj.code + " · " + courseObj.name : "";
         var weekLabel = selectedWeek === "all" ? "All weeks" : "Week " + selectedWeek;
         Attendify.printAttendanceReport({
-          title: "Attendance report — " + (programme ? programme.code : ""),
+          title: "Attendance report, " + (programme ? programme.code : ""),
           subtitle: (programme ? programme.name + " · " : "") + courseLabel + " · " + weekLabel,
           rows: currentFilteredRows.map(function (r) {
             if (selectedWeek === "all") {
@@ -679,8 +679,8 @@
                 name: r.name,
                 index: r.index,
                 level: r.level,
-                status: r.weekMarksLabel || "—",
-                time: r.aggregateLabel || (r.tier && r.tier.label) || "—"
+                status: r.weekMarksLabel || "…",
+                time: r.aggregateLabel || (r.tier && r.tier.label) || "…"
               };
             }
             return {
@@ -688,7 +688,7 @@
               index: r.index,
               level: r.level,
               status: r.statusLabel || (r.present ? "Present" : "Absent"),
-              time: r.present ? fmtTime(r.scannedAt) : "—"
+              time: r.present ? fmtTime(r.scannedAt) : "…"
             };
           })
         });

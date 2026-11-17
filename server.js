@@ -137,7 +137,15 @@ function readBody(req) {
   });
 }
 
-const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml", ".json": "application/json" };
+const types = {
+  ".html": "text/html",
+  ".css": "text/css",
+  ".js": "text/javascript",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".json": "application/json",
+  ".webmanifest": "application/manifest+json"
+};
 
 try {
   db.openDb();
@@ -648,6 +656,41 @@ function handleRequest(req, res) {
 
   let rel = decodeURIComponent(url.pathname);
   if (rel === "/") rel = "/index.html";
+
+  if (rel === "/manifest.webmanifest" || rel === "/manifest.json") {
+    const manifestPath = path.join(root, "manifest.webmanifest");
+    fs.readFile(manifestPath, function (err, data) {
+      if (err) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "application/manifest+json",
+        "Cache-Control": "public, max-age=3600"
+      });
+      res.end(data);
+    });
+    return;
+  }
+
+  if (rel === "/sw.js") {
+    const swPath = path.join(root, "sw.js");
+    fs.readFile(swPath, function (err, data) {
+      if (err) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "text/javascript",
+        "Cache-Control": "no-cache",
+        "Service-Worker-Allowed": "/"
+      });
+      res.end(data);
+    });
+    return;
+  }
 
   const joinMatch = rel.match(/^\/join\/([^/]+)\/?$/i);
   if (joinMatch) {

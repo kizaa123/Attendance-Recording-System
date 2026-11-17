@@ -5,3 +5,6 @@ data/attendify.db
 data/attendify.db-wal
 data/attendify.db-shm
 .attendify-stop
+android/
+ios/
+.capacitor/

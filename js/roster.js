@@ -8,7 +8,7 @@ var addModal = document.getElementById("addModal");
 var qrModal = document.getElementById("qrModal");
 
 function courseTitle() {
-  return "Programme — " + course.code + ": " + course.name;
+  return "Programme: " + course.code + ", " + course.name;
 }
 
 function syncCourse() {
@@ -100,8 +100,8 @@ function showQr(student) {
   document.getElementById("qr-index").textContent = student.index;
   var dept = course.department ? String(course.department).trim() : "";
   document.getElementById("qr-course").textContent = dept
-    ? "Permanent for " + dept + " — all courses in this department"
-    : "Permanent in this department — set department on the course for clarity";
+    ? "Permanent for " + dept + ". Covers all courses in this department."
+    : "Permanent in this department. Set department on the course for clarity.";
   qrModal.classList.remove("hidden");
   Attendify.drawQr(
     document.getElementById("qr-holder"),

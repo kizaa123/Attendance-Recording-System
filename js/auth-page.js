@@ -115,7 +115,7 @@
   } catch (e) {}
   setMode(!!openSignup);
 
-  /* —— Login —— */
+  /* Login */
   var programmeSelect = document.getElementById("login-programme");
   var loginForm = document.getElementById("login-form");
   var usernameInput = document.getElementById("login-username");
@@ -145,11 +145,11 @@
 
   function populateProgrammes(classes, preferredId) {
     if (!programmeSelect) return;
-    programmeSelect.innerHTML = '<option value="">— Use my saved programme —</option>';
+    programmeSelect.innerHTML = '<option value="">Use my saved programme</option>';
     (classes || []).forEach(function (cls) {
       var opt = document.createElement("option");
       opt.value = cls.id;
-      opt.textContent = (cls.code ? cls.code + " — " : "") + cls.name;
+      opt.textContent = (cls.code ? cls.code + " · " : "") + cls.name;
       if (preferredId && cls.id === preferredId) opt.selected = true;
       programmeSelect.appendChild(opt);
     });
@@ -280,7 +280,7 @@
     });
   }
 
-  /* —— Sign up: programme picker —— */
+  /* Sign up: programme picker */
   var signupProgrammes = [];
   var rosterPreviewTimer = null;
   var signupProgCombo = document.getElementById("signup-programme-combo");
@@ -337,7 +337,7 @@
   }
 
   function programmeLabel(p) {
-    return (p.code || "") + " — " + (p.name || "");
+    return (p.code || "") + " · " + (p.name || "");
   }
 
   function updateSignupProgrammeTriggerLabel() {
@@ -624,7 +624,7 @@
   }
   loadSignupProgrammes();
 
-  /* —— Sign up —— */
+  /* Sign up */
   var signupForm = document.getElementById("signup-form");
   var signupError = document.getElementById("signup-error");
   var signupBtn = document.getElementById("btn-signup");

@@ -73,7 +73,7 @@
     options = options || {};
     if (!global.Attendify || !student) return "";
     var indexVal = studentIndexValue(student);
-    var timeStr = scannedAt ? global.Attendify.formatTime(scannedAt) : "—";
+    var timeStr = scannedAt ? global.Attendify.formatTime(scannedAt) : "…";
     var ring = options.ring != null ? options.ring : "ring-2 ring-slate-100";
     var badge = attendanceSessionBadge(badgeKind);
     var removeBtn = options.removeButtonHtml || "";
@@ -146,7 +146,7 @@
     var labels = { present: "Present", waiting: "Waiting...", absent: "Absent" };
     var key = labels[kind] ? kind : "";
     if (!key) {
-      return '<span class="attendance-session-badge attendance-session-badge--neutral" role="status">—</span>';
+      return '<span class="attendance-session-badge attendance-session-badge--neutral" role="status">…</span>';
     }
     return (
       '<span class="attendance-session-badge attendance-session-badge--' +

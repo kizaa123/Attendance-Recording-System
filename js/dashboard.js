@@ -65,7 +65,13 @@ function handleScanResult(result) {
     return;
   }
   renderLive();
-  renderDashboard();
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(function () {
+      renderDashboard();
+    });
+  } else {
+    renderDashboard();
+  }
   AttendifyScannerHud.showVerified(result.student, result.record.scannedAt, result.duplicate);
   var undoBtn = document.getElementById("scan-hud-undo");
   if (undoBtn) {
@@ -75,9 +81,13 @@ function handleScanResult(result) {
   }
 }
 
+function scanDedupeMs() {
+  return (window.AttendifyScannerHud && AttendifyScannerHud.SCAN_DEDUPE_MS) || 260;
+}
+
 function onScan(text) {
   var now = Date.now();
-  if (text === lastCode && now - lastScanAt < 550) return;
+  if (text === lastCode && now - lastScanAt < scanDedupeMs()) return;
   lastCode = text;
   lastScanAt = now;
   var parsed = Attendify.parseQr(text);
@@ -349,7 +359,7 @@ function fillStartAttendanceCourseSelect(classId) {
           esc(course.id) +
           '">' +
           esc(course.code) +
-          " — " +
+          " · " +
           esc(course.name) +
           "</option>"
         );
@@ -726,7 +736,7 @@ function renderProgrammeCoursesList(classId, prefix, teachLevel) {
   var courses = Attendify.coursesForProgramme(classId);
   if (!courses.length) {
     host.innerHTML =
-      '<li class="text-[11px] text-slate-400 italic px-1 py-0.5">No courses yet — use + in the sidebar or on this card.</li>';
+      '<li class="text-[11px] text-slate-400 italic px-1 py-0.5">No courses yet. Use + in the sidebar or on this card.</li>';
     return;
   }
   host.innerHTML = courses
@@ -802,17 +812,17 @@ function renderClassCardStats(course, prefix) {
   if (courseCount) courseCount.textContent = String(courseTotal);
   if (coursesBadge) coursesBadge.textContent = String(courseTotal);
   if (sessions) {
-    sessions.textContent = "—";
+    sessions.textContent = "…";
     sessions.title = "Roll-call weeks are shown on each course below";
   }
   if (attendance) {
-    attendance.textContent = "—";
+    attendance.textContent = "…";
     attendance.title = "Attendance marks are shown on each course below";
   }
   if (roster) roster.title = stats.enrolled + " students enrolled";
   if (!rate) return;
   var inner = rate.querySelector("span");
-  var val = "—";
+  var val = "…";
   if (stats.turnoutToday != null && stats.enrolled > 0) val = stats.turnoutToday + "%";
   if (inner) inner.textContent = val;
   else rate.textContent = val;
@@ -903,8 +913,8 @@ function buildClassCardMarkup(course, index) {
       '<dl class="dashboard-prog-card-stats grid grid-cols-4 gap-0.5 border-t border-slate-100 pt-1.5 text-[10px] sm:text-[11px] leading-tight">' +
         '<div><dt class="text-slate-400 font-medium">Enrolled</dt><dd id="' + prefix + '-enrolled" class="font-bold text-slate-800 text-xs sm:text-sm mt-0.5">0</dd></div>' +
         '<div><dt class="text-slate-400 font-medium">Courses</dt><dd id="' + prefix + '-course-count" class="font-bold text-brand-700 text-xs sm:text-sm tabular-nums mt-0.5">0</dd></div>' +
-        '<div><dt class="text-slate-400 font-medium" title="See each course in the list">Sessions</dt><dd id="' + prefix + '-sessions" class="font-bold text-slate-400 text-xs sm:text-sm mt-0.5">—</dd></div>' +
-        '<div><dt class="text-slate-400 font-medium" title="Attendance taken per course below">Taken</dt><dd id="' + prefix + '-attendance" class="font-bold text-slate-400 text-xs sm:text-sm tabular-nums mt-0.5">—</dd></div>' +
+        '<div><dt class="text-slate-400 font-medium" title="See each course in the list">Sessions</dt><dd id="' + prefix + '-sessions" class="font-bold text-slate-400 text-xs sm:text-sm mt-0.5">…</dd></div>' +
+        '<div><dt class="text-slate-400 font-medium" title="Attendance taken per course below">Taken</dt><dd id="' + prefix + '-attendance" class="font-bold text-slate-400 text-xs sm:text-sm tabular-nums mt-0.5">…</dd></div>' +
       "</dl>" +
       '<div class="dashboard-prog-card-actions flex items-center gap-1.5">' +
         '<button type="button" data-action="scan" data-class-id="' +

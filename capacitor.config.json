@@ -1,0 +1,23 @@
+{
+  "appId": "edu.ucc.attendify",
+  "appName": "Attendify",
+  "webDir": ".",
+  "server": {
+    "url": "https://YOUR-SERVICE.onrender.com",
+    "cleartext": false,
+    "androidScheme": "https",
+    "allowNavigation": ["*.onrender.com"]
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "scheme": "Attendify"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}

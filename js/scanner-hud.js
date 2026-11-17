@@ -3,6 +3,7 @@
   var hudDismissTimer = null;
   var HUD_DISMISS_MS = 2600;
   var HUD_DISMISS_VERIFIED_MS = 3400;
+  var SCAN_DEDUPE_MS = 260;
   var audioCtx = null;
 
   function clearHudDismissTimer() {
@@ -327,7 +328,7 @@
     options = options || {};
     var fullFrame = options.fullFrame !== false;
     var cfg = {
-      fps: 24,
+      fps: 30,
       disableFlip: false,
       qrbox: function (viewfinderWidth, viewfinderHeight) {
         return qrboxSizing(viewfinderWidth, viewfinderHeight, fullFrame);
@@ -343,8 +344,9 @@
   function softVideoResolution(constraint) {
     var base =
       constraint && typeof constraint === "object" ? Object.assign({}, constraint) : { facingMode: constraint || "environment" };
-    base.width = { ideal: 1280 };
-    base.height = { ideal: 720 };
+    base.width = { ideal: 1280, min: 640 };
+    base.height = { ideal: 720, min: 480 };
+    base.frameRate = { ideal: 30, min: 15, max: 60 };
     return base;
   }
 
@@ -468,6 +470,7 @@
   }
 
   global.AttendifyScannerHud = {
+    SCAN_DEDUPE_MS: SCAN_DEDUPE_MS,
     showVerified: showVerified,
     hideVerified: hideVerified,
     showUnknown: showUnknown,

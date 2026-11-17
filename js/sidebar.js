@@ -147,7 +147,7 @@
           .join("");
         if (!courses.length) {
           courseLines =
-            '<p class="pl-11 pr-2 py-1 text-[10px] text-slate-500 italic">No courses — tap + to add one.</p>';
+            '<p class="pl-11 pr-2 py-1 text-[10px] text-slate-500 italic">No courses yet. Tap + to add one.</p>';
         }
         return (
           '<div class="rounded-lg mx-0.5 ' +
@@ -286,7 +286,7 @@
     var submitBtn = document.getElementById("create-course-submit");
     if (submitBtn) submitBtn.textContent = courseToEdit ? "Save" : "Create";
     document.getElementById("create-course-programme").textContent = programme
-      ? programme.code + " — " + programme.name
+      ? programme.code + " · " + programme.name
       : "";
     var form = document.getElementById("create-course-form");
     if (form) {
@@ -383,7 +383,7 @@
         note.classList.remove("hidden");
       } else {
         note.textContent =
-          "No students at this level yet — share the registration link from the programme page when you are ready.";
+          "No students at this level yet. Share the registration link from the programme page when you are ready.";
         note.classList.remove("hidden");
       }
     });
@@ -496,7 +496,7 @@
           '<option value="' +
           escapeHtml(p.id) +
           '">' +
-          escapeHtml((p.code || "") + " — " + (p.name || "")) +
+          escapeHtml((p.code || "") + " · " + (p.name || "")) +
           "</option>";
       });
       select.innerHTML = html;
@@ -642,7 +642,7 @@
     var bits = [];
     if (programme.code) bits.push(String(programme.code));
     if (programme.name) bits.push(String(programme.name));
-    var label = bits.join(" — ") || "Programme";
+    var label = bits.join(" · ") || "Programme";
     if (programme.teachLevel != null && programme.teachLevel !== "") {
       label += " · L" + String(programme.teachLevel);
     }
