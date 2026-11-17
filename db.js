@@ -782,6 +782,45 @@ function uccProgrammeById(id) {
   );
 }
 
+function deriveClassIndexPattern(studentIndexes) {
+  const list = (studentIndexes || [])
+    .map(function (idx) {
+      return String(idx || "").trim();
+    })
+    .filter(Boolean);
+  if (!list.length) return "";
+  const counts = {};
+  list.forEach(function (sample) {
+    let pattern = sample;
+    const parts = sample.split("/");
+    if (parts.length > 0) {
+      const last = parts[parts.length - 1];
+      if (/^\d+$/.test(last)) {
+        parts[parts.length - 1] = last.replace(/\d/g, "0");
+        pattern = parts.join("/");
+      } else {
+        pattern = sample.replace(/\d+$/, function (digits) {
+          return digits.replace(/\d/g, "0");
+        });
+      }
+    } else {
+      pattern = sample.replace(/\d+$/, function (digits) {
+        return digits.replace(/\d/g, "0");
+      });
+    }
+    counts[pattern] = (counts[pattern] || 0) + 1;
+  });
+  let best = "";
+  let bestN = -1;
+  Object.keys(counts).forEach(function (key) {
+    if (counts[key] > bestN) {
+      bestN = counts[key];
+      best = key;
+    }
+  });
+  return best;
+}
+
 function rosterPreviewByUccProgramme(uccProgrammeId, level) {
   openDb();
   const pick = uccProgrammeById(uccProgrammeId);
@@ -802,7 +841,7 @@ function rosterPreviewByUccProgramme(uccProgrammeId, level) {
       classId: "",
       count: 0,
       sharedRoster: false,
-      students: []
+      classIndexPattern: ""
     };
   }
   const rows = db
@@ -819,14 +858,11 @@ function rosterPreviewByUccProgramme(uccProgrammeId, level) {
     classId: classRow.id,
     count: rows.length,
     sharedRoster: rows.length > 0,
-    students: rows.map(function (row) {
-      return {
-        id: row.id,
-        name: row.name,
-        studentIndex: row.studentIndex,
-        level: row.level
-      };
-    })
+    classIndexPattern: deriveClassIndexPattern(
+      rows.map(function (row) {
+        return row.studentIndex;
+      })
+    )
   };
 }
 

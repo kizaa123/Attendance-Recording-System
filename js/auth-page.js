@@ -324,9 +324,7 @@
   }
   var signupLevelSelect = document.getElementById("signup-level");
   var signupRosterWrap = document.getElementById("signup-roster-wrap");
-  var signupRosterHeading = document.getElementById("signup-roster-heading");
-  var signupRosterEmpty = document.getElementById("signup-roster-empty");
-  var signupRosterList = document.getElementById("signup-roster-list");
+  var signupRosterMessage = document.getElementById("signup-roster-message");
 
   function escapeHtml(str) {
     return String(str || "")
@@ -510,10 +508,33 @@
     }
   }
 
+  function signupRosterProgrammeTag(code, level) {
+    return String(code || "").trim() + ".Level" + String(level || "");
+  }
+
+  function formatSignupRosterMessage(pack) {
+    if (!pack || !pack.programme) return "";
+    var tag = signupRosterProgrammeTag(pack.programme.code, pack.level);
+    var count = Number(pack.count) || 0;
+    var pattern = String(pack.classIndexPattern || "").trim();
+    var suffix = pattern ? " (" + pattern + ")" : "";
+    if (count > 0) {
+      return (
+        count +
+        " student" +
+        (count === 1 ? "" : "s") +
+        " already enrolled at " +
+        tag +
+        "." +
+        suffix
+      );
+    }
+    return "No students enrolled at " + tag + " yet. You can still register.";
+  }
+
   function hideSignupRoster() {
     if (signupRosterWrap) signupRosterWrap.classList.add("hidden");
-    if (signupRosterList) signupRosterList.innerHTML = "";
-    if (signupRosterEmpty) signupRosterEmpty.classList.add("hidden");
+    if (signupRosterMessage) signupRosterMessage.textContent = "";
   }
 
   function refreshSignupRosterPreview() {
@@ -532,39 +553,8 @@
         }
         if (!signupRosterWrap) return;
         signupRosterWrap.classList.remove("hidden");
-        if (signupRosterHeading) {
-          if (pack.sharedRoster && pack.count > 0) {
-            signupRosterHeading.textContent =
-              pack.count +
-              " student" +
-              (pack.count === 1 ? "" : "s") +
-              " already enrolled at " +
-              pack.programme.code +
-              " · Level " +
-              pack.level +
-              ". One programme QR covers this class.";
-          } else {
-            signupRosterHeading.textContent =
-              "No students at " + pack.programme.code + " · Level " + pack.level + " yet. You can still register.";
-          }
-        }
-        if (signupRosterEmpty) signupRosterEmpty.classList.add("hidden");
-        if (signupRosterList) {
-          if (!pack.students || !pack.students.length) {
-            signupRosterList.innerHTML = "";
-          } else {
-            signupRosterList.innerHTML = pack.students
-              .map(function (st) {
-                return (
-                  "<li><span>" +
-                  escapeHtml(st.name) +
-                  '</span><span class="font-mono text-[10px] text-slate-500">' +
-                  escapeHtml(st.studentIndex) +
-                  "</span></li>"
-                );
-              })
-              .join("");
-          }
+        if (signupRosterMessage) {
+          signupRosterMessage.textContent = formatSignupRosterMessage(pack);
         }
       });
     }, 220);

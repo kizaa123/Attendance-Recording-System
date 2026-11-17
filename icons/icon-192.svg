@@ -1,18 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" fill="none">
   <defs>
-    <linearGradient id="a" x1="28" y1="24" x2="168" y2="172" gradientUnits="userSpaceOnUse">
+    <linearGradient id="g192" x1="32" y1="28" x2="160" y2="168" gradientUnits="userSpaceOnUse">
       <stop stop-color="#1d3b6d"/>
       <stop offset="1" stop-color="#14b8a6"/>
     </linearGradient>
   </defs>
-  <rect width="192" height="192" rx="40" fill="url(#a)"/>
+  <rect width="192" height="192" rx="44" fill="url(#g192)"/>
   <path
+    fill="none"
     stroke="#fff"
-    stroke-width="5.5"
+    stroke-width="2.2"
     stroke-linecap="round"
     stroke-linejoin="round"
-    fill="none"
-    transform="translate(36, 36) scale(5)"
+    transform="translate(48 48) scale(4)"
     d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
   />
 </svg>

@@ -837,29 +837,11 @@ h2.auth-form-panel,
   border-radius: 0.75rem;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
-  max-height: 9.5rem;
-  overflow-y: auto;
 }
 
-.auth-roster-list {
-  list-style: none;
-  padding: 0;
+.auth-roster-preview #signup-roster-message {
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.auth-roster-list li {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.auth-roster-list li:last-child {
-  border-bottom: none;
+  font-variant-numeric: tabular-nums;
 }
 
 .auth-programme-combo {
@@ -1209,6 +1191,20 @@ body.auth-programme-sheet-open .auth-viewport {
     margin-bottom: 0.55rem;
     --auth-logo-outer: 3rem;
     --auth-logo-inner: 2.6rem;
+  }
+
+  .auth-page .auth-form-logo-mark--app {
+    border-radius: 0.65rem;
+  }
+
+  .auth-page .auth-form-logo-mark--app svg {
+    width: 1.42rem;
+    height: 1.42rem;
+  }
+
+  .auth-page .auth-hero-title-logo svg {
+    width: 1.42rem;
+    height: 1.42rem;
   }
 
   .auth-page .flex.p-1.bg-slate-100 {
