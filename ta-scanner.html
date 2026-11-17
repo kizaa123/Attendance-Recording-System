@@ -182,7 +182,7 @@
   </script>
   <script src="/js/scan-cache.js?v=1"></script>
   <script src="/js/store.js?v=37"></script>
-  <script src="/js/scanner-hud.js?v=26"></script>
+  <script src="/js/scanner-hud.js?v=27"></script>
   <script src="/js/mobile-app.js?v=2"></script>
   <script>
   (function () {
@@ -359,8 +359,7 @@
       });
       renderRecent();
 
-      // Give DOM time to calculate dimensions before initializing camera
-      openTaCameraAfterLayout();
+      beginTaCameraWhenReady();
 
       // Roster comes with session (no heavy /api/state fetch)
       renderManualRoster();
@@ -378,6 +377,27 @@
     }
 
     // ─── Camera Management ────────────────────────────────────────────────────
+    function beginTaCameraWhenReady() {
+      var Hud = window.AttendifyScannerHud;
+      if (!Hud || !Hud.whenHtml5QrcodeReady) {
+        showCameraPrompt("Scanner is still loading. Tap Start Camera in a moment.");
+        return;
+      }
+      Hud.whenHtml5QrcodeReady(function (ready) {
+        if (!ready) {
+          showCameraPrompt("Scanner library did not load. Check your connection, then tap Start Camera.");
+          return;
+        }
+        window.setTimeout(function () {
+          if (Hud.prefersTapToStartCamera && Hud.prefersTapToStartCamera()) {
+            showCameraPrompt("Tap Start Camera so your browser can open the scanner.");
+          } else {
+            openTaCameraAfterLayout();
+          }
+        }, 100);
+      });
+    }
+
     function openTaCameraAfterLayout() {
       stopCamera().then(function () {
         requestAnimationFrame(function () {

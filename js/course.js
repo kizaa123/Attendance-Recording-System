@@ -642,6 +642,10 @@
   }
 
   function flipCamera() {
+    if (!scanner && !cameraStarting) {
+      startCamera();
+      return;
+    }
     cameraFacing = cameraFacing === "environment" ? "user" : "environment";
     stopCamera().then(function () {
       setTimeout(startCamera, 120);
@@ -649,10 +653,28 @@
   }
 
   function openScannerCameraAfterLayout() {
+    var Hud = window.AttendifyScannerHud;
     stopCamera().then(function () {
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
-          startCamera();
+          function runStart() {
+            if (Hud && Hud.prefersTapToStartCamera && Hud.prefersTapToStartCamera()) {
+              hudScanMessage("Tap ↻ to start the camera.", "info", false);
+              return;
+            }
+            startCamera();
+          }
+          if (Hud && Hud.whenHtml5QrcodeReady) {
+            Hud.whenHtml5QrcodeReady(function (ok) {
+              if (!ok) {
+                hudScanMessage("Scanner is still loading. Tap ↻ to start the camera.", "warning", false);
+                return;
+              }
+              setTimeout(runStart, 80);
+            });
+          } else {
+            runStart();
+          }
         });
       });
     });

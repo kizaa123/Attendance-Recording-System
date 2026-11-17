@@ -299,6 +299,35 @@
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   }
 
+  function isMobileDevice() {
+    try {
+      return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "");
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /** Phones/tablets need a tap before getUserMedia (iOS / many Android browsers). */
+  function prefersTapToStartCamera() {
+    return isMobileDevice();
+  }
+
+  function whenHtml5QrcodeReady(callback, timeoutMs) {
+    timeoutMs = timeoutMs == null ? 10000 : timeoutMs;
+    var started = Date.now();
+    (function tick() {
+      if (typeof Html5Qrcode !== "undefined") {
+        if (callback) callback(true);
+        return;
+      }
+      if (Date.now() - started >= timeoutMs) {
+        if (callback) callback(false);
+        return;
+      }
+      setTimeout(tick, 45);
+    })();
+  }
+
   function cameraContextHint() {
     if (window.location.protocol === "file:") {
       return "The camera cannot run from a saved file. Open Attendify in your browser.";
@@ -489,6 +518,9 @@
     cameraContextHint: cameraContextHint,
     createQrScanner: createQrScanner,
     getCameraVideoConstraints: getCameraVideoConstraints,
-    startQrCamera: startQrCamera
+    startQrCamera: startQrCamera,
+    isMobileDevice: isMobileDevice,
+    prefersTapToStartCamera: prefersTapToStartCamera,
+    whenHtml5QrcodeReady: whenHtml5QrcodeReady
   };
 })(window);
