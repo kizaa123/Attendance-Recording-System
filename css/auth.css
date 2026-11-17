@@ -18,8 +18,8 @@ body.auth-splash-page a {
 
 /* Mobile-only opening screen (splash.html) — desktop skips via auth-splash.js */
 :root {
-  --auth-splash-duration-mobile: 3200ms;
-  --auth-splash-fade-ms: 560ms;
+  --auth-splash-duration-mobile: 780ms;
+  --auth-splash-fade-ms: 140ms;
   --auth-splash-brand-bg: #101627;
   --auth-campus-image: url("../assets/uccbuilding\ logo.jpg");
   --auth-campus-position-desktop: 62% 40%;
@@ -31,8 +31,9 @@ body.auth-splash-page a {
 body.auth-splash-page {
   margin: 0;
   min-height: 100dvh;
-  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Plus Jakarta Sans", sans-serif;
   background: var(--auth-splash-brand-bg);
+  overscroll-behavior: none;
 }
 
 .auth-splash--standalone {
@@ -52,7 +53,7 @@ body.auth-splash-page {
 }
 
 .auth-splash.auth-splash--visible {
-  animation: auth-splash-screen-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: auth-splash-screen-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes auth-splash-screen-in {
@@ -94,12 +95,25 @@ body.auth-splash-page {
   display: block;
 }
 
+.auth-splash__app-icon {
+  width: 4.75rem;
+  height: 4.75rem;
+  margin: 0 auto 1rem;
+  border-radius: 1.2rem;
+  display: block;
+  object-fit: contain;
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(94, 234, 212, 0.22);
+  animation: auth-splash-logo-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+
 .auth-brand-logo-mark--splash {
   width: 4.65rem;
   height: 4.65rem;
   margin: 0 auto 1rem;
-  border-radius: 1rem;
-  animation: auth-splash-logo-in 1s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+  border-radius: 1.15rem;
+  animation: auth-splash-logo-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
 }
 
 .auth-brand-logo-mark--splash svg {
@@ -138,7 +152,55 @@ body.auth-splash-page {
   font-weight: 900;
   letter-spacing: -0.02em;
   color: #ffffff;
-  animation: auth-splash-text-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.28s both;
+  animation: auth-splash-text-in 0.52s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+.auth-splash__title.auth-splash__title--loading {
+  background: linear-gradient(
+    100deg,
+    #ffffff 0%,
+    #ffffff 38%,
+    #5eead4 50%,
+    #ffffff 62%,
+    #ffffff 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation:
+    auth-splash-title-shimmer 1.15s ease-in-out infinite,
+    auth-splash-text-in 0.52s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+@keyframes auth-splash-title-shimmer {
+  0% {
+    background-position: 120% center;
+  }
+  100% {
+    background-position: -20% center;
+  }
+}
+
+.auth-splash--pwa .auth-splash__media-shell,
+.auth-splash--pwa .auth-splash__transition {
+  display: none;
+}
+
+.auth-splash--pwa .auth-splash__brand {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 5rem;
+}
+
+.auth-splash--pwa .auth-splash__bar-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 2rem);
 }
 
 .auth-splash__tagline {
@@ -392,12 +454,21 @@ body.auth-page {
   .auth-splash.auth-splash--visible,
   .auth-splash__logo,
   .auth-splash__title,
+  .auth-splash__title.auth-splash__title--loading,
   .auth-splash__tagline,
   .auth-splash__media,
+  .auth-splash__app-icon,
   .auth-brand-logo-mark--splash {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+
+  .auth-splash__title.auth-splash__title--loading {
+    color: #ffffff;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
   }
 
   .auth-splash__media {
