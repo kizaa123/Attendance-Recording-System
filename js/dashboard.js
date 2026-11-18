@@ -86,14 +86,10 @@ function scanDedupeMs() {
 }
 
 function onScan(text) {
-  var now = Date.now();
-  if (text === lastCode && now - lastScanAt < scanDedupeMs()) return;
-  lastCode = text;
-  lastScanAt = now;
   var parsed = Attendify.parseQr(text);
   var qrToken = parsed && parsed.qrToken ? parsed.qrToken : null;
   var index = parsed && parsed.index ? parsed.index : !qrToken ? text : null;
-  Attendify.markPresent(activeClassId, index, qrToken, activeLectureTitle, activeWeek).then(handleScanResult);
+  return Attendify.markPresent(activeClassId, index, qrToken, activeLectureTitle, activeWeek).then(handleScanResult);
 }
 
 function persistLiveScanFromDashboard() {
@@ -1085,12 +1081,16 @@ Attendify.ready().then(function () {
     if (document.hidden) return;
     dashSyncTick += 1;
     var scanning = scannerModal && !scannerModal.classList.contains("hidden");
-    if (!scanning && dashSyncTick % 4 !== 0) return;
+    if (scanning) {
+      if (dashSyncTick % 2 !== 0) return;
+      Attendify.syncFromServer().then(function () {
+        renderLive();
+      });
+      return;
+    }
+    if (dashSyncTick % 5 !== 0) return;
     Attendify.syncFromServer().then(function () {
       renderDashboard();
-      if (scanning) {
-        renderLive();
-      }
     });
   }, 1000);
 

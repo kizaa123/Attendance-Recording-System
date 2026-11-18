@@ -494,15 +494,10 @@
   }
 
   function onScan(text) {
-    var now = Date.now();
-    var dedupe = (window.AttendifyScannerHud && AttendifyScannerHud.SCAN_DEDUPE_MS) || 260;
-    if (text === lastCode && now - lastScanAt < dedupe) return;
-    lastCode = text;
-    lastScanAt = now;
     var parsed = Attendify.parseQr(text);
     var qrToken = parsed && parsed.qrToken ? parsed.qrToken : null;
     var index = parsed && parsed.index ? parsed.index : !qrToken ? text : null;
-    Attendify.markPresent(programmeId, index, qrToken, lectureLabel, selectedWeek).then(handleScanResult);
+    return Attendify.markPresent(programmeId, index, qrToken, lectureLabel, selectedWeek).then(handleScanResult);
   }
 
   function persistLiveScanFromCourse(week) {
@@ -1023,8 +1018,14 @@
     var syncTick = 0;
     setInterval(function () {
       syncTick += 1;
-      var live = isScannerOpen() || isLiveWeekSession();
-      if (!live && syncTick % 4 !== 0) return;
+      var scanning = isScannerOpen();
+      var live = scanning || isLiveWeekSession();
+      if (scanning) {
+        if (syncTick % 2 !== 0) return;
+        refreshAttendanceFromServer();
+        return;
+      }
+      if (!live && syncTick % 5 !== 0) return;
       refreshAttendanceFromServer();
     }, 1000);
 

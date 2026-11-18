@@ -1015,6 +1015,10 @@ body.faculty-content-ready main .flex-1 {
   object-fit: cover !important;
   border: none !important;
   display: block !important;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
 
 @media (min-width: 768px) {

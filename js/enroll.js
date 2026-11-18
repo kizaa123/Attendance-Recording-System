@@ -244,18 +244,35 @@ document.getElementById("enroll-form").addEventListener("submit", function (even
       return;
     }
 
-    document.getElementById("enroll-form").classList.add("hidden");
-    document.getElementById("enroll-success").classList.remove("hidden");
-    document.getElementById("success-name").textContent = result.student.name;
-    document.getElementById("success-index").textContent = result.student.index;
-
-    var cardPhoto = Attendify.qrCompositePhotoUrl(result.student);
-    Attendify.drawQr(
-      document.getElementById("success-qr"),
-      Attendify.qrText(result.student),
-      document.getElementById("success-download"),
-      result.student.index + "-attendance-card.png",
-      cardPhoto
-    );
+    showEnrollQrSuccess(result.student, !!result.alreadyRegistered);
   });
 });
+
+function showEnrollQrSuccess(student, alreadyRegistered) {
+  if (!student) return;
+  document.getElementById("enroll-error").textContent = "";
+  document.getElementById("enroll-form").classList.add("hidden");
+  document.getElementById("enroll-success").classList.remove("hidden");
+  document.getElementById("success-name").textContent = student.name;
+  document.getElementById("success-index").textContent = student.index;
+
+  var lead = document.getElementById("success-lead");
+  if (lead) {
+    lead.textContent = alreadyRegistered
+      ? "You are already registered for this programme. Here is your QR card again."
+      : "You are registered. Save this card for attendance.";
+  }
+
+  var cardPhoto = Attendify.qrCompositePhotoUrl(student);
+  Attendify.drawQr(
+    document.getElementById("success-qr"),
+    Attendify.qrText(student),
+    document.getElementById("success-download"),
+    student.index + "-attendance-card.png",
+    cardPhoto
+  );
+  var success = document.getElementById("enroll-success");
+  if (success && success.scrollIntoView) {
+    success.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}

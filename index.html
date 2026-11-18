@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/home.css?v=3">
+  <link rel="stylesheet" href="css/home.css?v=6">
   <script src="js/auth-entry.js?v=2"></script>
   <script src="js/mobile-app.js?v=3"></script>
   <script>
@@ -64,8 +64,10 @@
             University of Cape Coast
           </p>
           <h1 id="home-hero-title" class="home-hero__title">
-            <span class="home-hero__line">One QR.</span>
-            <span class="home-hero__line"><span class="home-hero__highlight">Every lecture.</span></span>
+            <span class="home-hero__title-row" aria-hidden="false">
+              <span class="home-hero__line home-hero__line--inline">One QR.</span>
+              <span class="home-hero__line home-hero__line--inline home-hero__highlight">Every lecture.</span>
+            </span>
             <span class="home-hero__line home-hero__line--last">Trusted attendance.</span>
           </h1>
         </div>
@@ -164,6 +166,33 @@
         <div class="home-card__body">
           <h3>Weekly reports</h3>
           <p>Semester grid and CSV export for department audits.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="home-section home-section--attendance" id="attendance-ways" aria-labelledby="home-attendance-title">
+    <header class="home-section__head" data-reveal>
+      <h2 id="home-attendance-title">Easy ways to take attendance</h2>
+      <p>Gate check-in before class or a TA moving through the room, both tied to the same live session.</p>
+    </header>
+    <div class="home-attendance-cards">
+      <article class="home-attendance-card" data-reveal>
+        <div class="home-attendance-card__media" aria-hidden="true">
+          <img src="assets/event-entrance-line-scanning.webp" alt="" loading="lazy" width="800" height="520">
+        </div>
+        <div class="home-attendance-card__body">
+          <h3>Scan at the door</h3>
+          <p>Students show their QR pass before entering the lecture hall. One scan marks them present instantly.</p>
+        </div>
+      </article>
+      <article class="home-attendance-card" data-reveal style="transition-delay: 0.08s">
+        <div class="home-attendance-card__media" aria-hidden="true">
+          <img src="assets/classroom-qr-code-01eb17-4f384b7971b6.webp" alt="" loading="lazy" width="800" height="520">
+        </div>
+        <div class="home-attendance-card__body">
+          <h3>TA camera in the room</h3>
+          <p>Share scanner access so a TA walks the rows with a phone, scanning each student’s QR in seconds.</p>
         </div>
       </article>
     </div>

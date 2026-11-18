@@ -1,6 +1,19 @@
 (function (win) {
+  var SESSION_KEY = "attendify-session";
+
   function isMobileAuth() {
     return win.matchMedia("(max-width: 1023px)").matches;
+  }
+
+  function hasStoredLecturerSession() {
+    try {
+      var raw = win.sessionStorage.getItem(SESSION_KEY) || win.localStorage.getItem(SESSION_KEY);
+      if (!raw) return false;
+      var session = JSON.parse(raw);
+      return !!(session && session.token && session.lecturer);
+    } catch (e) {
+      return false;
+    }
   }
 
   function mobileSplashHref(search) {
@@ -57,6 +70,7 @@
 
   win.AttendifyAuthEntry = {
     isMobileAuth: isMobileAuth,
+    hasStoredLecturerSession: hasStoredLecturerSession,
     mobileSplashHref: mobileSplashHref,
     loginAfterSplashHref: loginAfterSplashHref,
     gateLoginToSplash: gateLoginToSplash,
