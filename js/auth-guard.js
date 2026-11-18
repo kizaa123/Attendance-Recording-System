@@ -27,18 +27,23 @@
     loginRedirect("?next=" + next);
   }
 
-  // Local session is a fast path; cookie-backed /api/auth/me is the source of truth.
   var session = Attendify.getSession && Attendify.getSession();
-  if (session && session.lecturer && session.token) {
-    Attendify.validateSession().then(function (result) {
+
+  function backgroundSessionCheck() {
+    Attendify.validateSession({ soft: true }).then(function (result) {
       if (result && result.ok) return;
       if (result && (result.offline || result.code === "NETWORK")) return;
+      if (session && session.token) return;
       bounce();
     });
+  }
+
+  if (session && session.lecturer && session.token) {
+    backgroundSessionCheck();
     return;
   }
 
-  Attendify.validateSession().then(function (result) {
+  Attendify.validateSession({ soft: true }).then(function (result) {
     if (result && result.ok) return;
     if (result && (result.offline || result.code === "NETWORK")) return;
     bounce();

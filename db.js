@@ -1140,6 +1140,21 @@ function lecturerPublic(row) {
   };
 }
 
+function pruneLecturerSessions(lecturerId, maxSessions) {
+  openDb();
+  const id = String(lecturerId || "");
+  if (!id) return;
+  const keep = Math.max(2, Number(maxSessions) || 10);
+  const rows = db
+    .prepare(
+      "SELECT token FROM lecturer_sessions WHERE lecturer_id = ? ORDER BY datetime(created_at) DESC"
+    )
+    .all(id);
+  for (let i = keep; i < rows.length; i++) {
+    db.prepare("DELETE FROM lecturer_sessions WHERE token = ?").run(rows[i].token);
+  }
+}
+
 function createLecturerSession(lecturerId, hours) {
   openDb();
   const token = crypto.randomBytes(32).toString("hex");
@@ -1149,6 +1164,7 @@ function createLecturerSession(lecturerId, hours) {
   db.prepare(
     "INSERT INTO lecturer_sessions (token, lecturer_id, created_at, expires_at) VALUES (?, ?, ?, ?)"
   ).run(token, lecturerId, createdAt, expires);
+  pruneLecturerSessions(lecturerId, 10);
   return { token: token, expiresAt: expires };
 }
 
@@ -1200,12 +1216,15 @@ function validateLecturerSession(token) {
     }
     lecturer = lecturerPublic(lec);
   }
+  const slideHours = 12;
+  const refreshed = new Date(Date.now() + slideHours * 60 * 60 * 1000).toISOString();
+  db.prepare("UPDATE lecturer_sessions SET expires_at = ? WHERE token = ?").run(refreshed, t);
   return {
     ok: true,
     token: row.token,
     lecturer: lecturer,
     lecturerId: row.lecturerId,
-    expiresAt: row.expiresAt
+    expiresAt: refreshed
   };
 }
 
@@ -1539,7 +1558,6 @@ function loginLecturer(input) {
     classId = programmeIds[0] || "";
   }
   if (classId) setSetting("activeClassId", classId);
-  destroyLecturerSessionsForUser(row.id);
   const session = createLecturerSession(row.id);
 
   return {

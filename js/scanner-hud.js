@@ -532,21 +532,16 @@
 
   function updateCameraFacingBadge(el, facing) {
     if (!el) return;
-    el.textContent = facing === "user" ? "Front" : "Back";
     el.setAttribute("data-facing", facing === "user" ? "user" : "environment");
     el.setAttribute("title", cameraFacingLabel(facing));
+    el.textContent = "";
+    el.setAttribute("aria-hidden", "true");
+    el.classList.add("hidden");
   }
 
   function setFacingButtonStates(frontBtn, backBtn, facing) {
-    var isFront = facing === "user";
-    if (frontBtn) {
-      frontBtn.classList.toggle("is-active", isFront);
-      frontBtn.setAttribute("aria-pressed", isFront ? "true" : "false");
-    }
-    if (backBtn) {
-      backBtn.classList.toggle("is-active", !isFront);
-      backBtn.setAttribute("aria-pressed", !isFront ? "true" : "false");
-    }
+    if (frontBtn) frontBtn.setAttribute("aria-hidden", "true");
+    if (backBtn) backBtn.setAttribute("aria-hidden", "true");
   }
 
   function whenHtml5QrcodeReady(callback, timeoutMs) {

@@ -3,6 +3,43 @@ html {
   color-scheme: light;
 }
 
+.attendify-net-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  padding: 0.55rem 0.85rem;
+  padding-top: max(0.55rem, env(safe-area-inset-top, 0px));
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+}
+
+.attendify-net-banner--offline {
+  background: #fff7ed;
+  color: #9a3412;
+  border-bottom: 1px solid #fed7aa;
+}
+
+.attendify-net-banner--synced {
+  background: #ecfdf5;
+  color: #047857;
+  border-bottom: 1px solid #a7f3d0;
+}
+
+.attendify-net-banner.hidden {
+  display: none;
+}
+
+body:has(.attendify-net-banner:not(.hidden)) .faculty-main,
+body:has(.attendify-net-banner:not(.hidden)) .portal-shell {
+  scroll-padding-top: 2.75rem;
+}
+
 /* QR scan + camera: stay in light rendering (OS dark mode must not invert video/canvas/QR). */
 .scan-camera-shell,
 .scan-camera-shell #qr-reader,
@@ -909,8 +946,18 @@ body.faculty-content-ready main .flex-1 {
   border-radius: 0.65rem;
 }
 
+/* No Front/Back camera switch labels on phone — use flip icon only */
+@media (max-width: 1023px) {
+  .scan-camera-facing-pill,
+  .scan-camera-facing-btn {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
+
 .scan-camera-facing-pill {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 0.25rem;
   padding: 0.2rem 0.5rem;
@@ -954,6 +1001,7 @@ body.faculty-content-ready main .flex-1 {
 }
 
 .scan-camera-facing-btn {
+  display: none;
   min-width: 2.65rem;
   height: 1.85rem;
   padding: 0 0.55rem;

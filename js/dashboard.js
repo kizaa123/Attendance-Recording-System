@@ -209,12 +209,9 @@ function startCamera() {
 function syncFacingUi() {
   var Hud = window.AttendifyScannerHud;
   if (!Hud) return;
-  Hud.updateCameraFacingBadge(document.getElementById("scan-camera-facing-badge"), cameraFacing);
-  Hud.setFacingButtonStates(
-    document.getElementById("btn-camera-front"),
-    document.getElementById("btn-camera-back"),
-    cameraFacing
-  );
+  if (Hud.setFacingButtonStates) {
+    Hud.setFacingButtonStates(null, null, cameraFacing);
+  }
 }
 
 function applyCameraFacing(next) {
@@ -1096,20 +1093,20 @@ Attendify.ready().then(function () {
   var dashSyncTick = 0;
   setInterval(function () {
     if (document.hidden) return;
-    dashSyncTick += 1;
-    var scanning = scannerModal && !scannerModal.classList.contains("hidden");
-    if (scanning) {
-      if (dashSyncTick % 2 !== 0) return;
-      Attendify.syncFromServer().then(function () {
-        renderLive();
-      });
-      return;
+    if (Attendify.isNetworkDegraded && Attendify.isNetworkDegraded()) {
+      dashSyncTick += 1;
+      if (dashSyncTick % 8 !== 0) return;
+    } else {
+      dashSyncTick += 1;
     }
-    if (dashSyncTick % 5 !== 0) return;
+    var scanning = scannerModal && !scannerModal.classList.contains("hidden");
+    var cadence = Attendify.isNetworkDegraded && Attendify.isNetworkDegraded() ? 6 : scanning ? 2 : 5;
+    if (dashSyncTick % cadence !== 0) return;
     Attendify.syncFromServer().then(function () {
-      renderDashboard();
+      if (scanning) renderLive();
+      else renderDashboard();
     });
-  }, 1000);
+  }, 3000);
 
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden && scannerModal && !scannerModal.classList.contains("hidden")) {

@@ -58,6 +58,65 @@
     return "Connection lost. Check Wi‑Fi and try again.";
   }
 
+  var API_TIMEOUT_MS = 12000;
+  var syncInFlight = null;
+  var syncCooldownUntil = 0;
+  var networkDegraded = false;
+
+  function isNetworkDegraded() {
+    if (global.navigator && global.navigator.onLine === false) return true;
+    return networkDegraded;
+  }
+
+  function markNetworkDegraded(on) {
+    networkDegraded = !!on;
+    if (global.AttendifyConnectivity && global.AttendifyConnectivity.reflect) {
+      global.AttendifyConnectivity.reflect();
+    }
+  }
+
+  function isNetworkError(err) {
+    if (!err) return true;
+    if (err.code === "NETWORK" || err.name === "AbortError") return true;
+    return false;
+  }
+
+  function fetchWithTimeout(url, options, timeoutMs) {
+    timeoutMs = timeoutMs == null ? API_TIMEOUT_MS : timeoutMs;
+    options = options || {};
+    if (typeof AbortController === "undefined") {
+      return fetch(url, options);
+    }
+    var controller = new AbortController();
+    var timer = global.setTimeout(function () {
+      try {
+        controller.abort();
+      } catch (_) {}
+    }, timeoutMs);
+    var opts = Object.assign({}, options, { signal: controller.signal });
+    return fetch(url, opts)
+      .catch(function (err) {
+        if (err && err.name === "AbortError") {
+          var timeoutErr = new Error("timeout");
+          timeoutErr.code = "NETWORK";
+          throw timeoutErr;
+        }
+        throw err;
+      })
+      .finally(function () {
+        global.clearTimeout(timer);
+      });
+  }
+
+  function pendingScanCount() {
+    if (!global.AttendifyScanCache || !AttendifyScanCache.queueDepth) return 0;
+    try {
+      return AttendifyScanCache.queueDepth("lecturer") || 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   function seedStudents() {
     return [
       { id: "s1", classId: "cs101", name: "Elena Rostova", index: "CS2024-0012", email: "e.rostova@student.ac.edu", photo: "", source: "lecturer" },
@@ -157,37 +216,55 @@
     if (options.body && typeof options.body === "object" && !(options.body instanceof Blob)) {
       opts.body = JSON.stringify(options.body);
     }
-    return fetch(apiUrl(path), opts).then(function (response) {
-      if (response.status === 401) {
-        return response.json().catch(function () {
-          return { ok: false, code: "AUTH_REQUIRED" };
-        }).then(function (body) {
-          var page = (window.location.pathname || "").toLowerCase();
-          var isPublic =
-            page.indexOf("login.html") !== -1 ||
-            page.indexOf("signup.html") !== -1 ||
-            page.indexOf("enroll.html") !== -1 ||
-            page.indexOf("ta-scanner.html") !== -1;
-          var hardRedirect =
-            !options.skipAuthRedirect &&
-            !options.silentAuth &&
-            !(global.AttendifyScannerHud && AttendifyScannerHud.isLiveScanPage && AttendifyScannerHud.isLiveScanPage());
-          if (!isPublic && hardRedirect) {
-            clearSession();
-            var next = encodeURIComponent(
-              (window.location.pathname.split("/").pop() || "dashboard.html") + (window.location.search || "")
-            );
-            window.location.replace("login.html?next=" + next);
-          }
-          return Promise.reject(body || { ok: false, code: "AUTH_REQUIRED" });
-        });
-      }
-      return response;
-    });
+    var url = apiUrl(path);
+    return fetchWithTimeout(url, opts, options.timeoutMs)
+      .then(function (response) {
+        if (response.status === 401) {
+          markNetworkDegraded(true);
+          return response.json().catch(function () {
+            return { ok: false, code: "AUTH_REQUIRED" };
+          }).then(function (body) {
+            var page = (window.location.pathname || "").toLowerCase();
+            var isPublic =
+              page.indexOf("login.html") !== -1 ||
+              page.indexOf("signup.html") !== -1 ||
+              page.indexOf("enroll.html") !== -1 ||
+              page.indexOf("ta-scanner.html") !== -1;
+            var hasLocal =
+              !!(function () {
+                try {
+                  var s = getSession();
+                  return s && s.token && s.lecturer;
+                } catch (_) {
+                  return false;
+                }
+              })();
+            var hardRedirect =
+              !hasLocal &&
+              !options.skipAuthRedirect &&
+              !options.silentAuth &&
+              !(global.AttendifyScannerHud && AttendifyScannerHud.isLiveScanPage && AttendifyScannerHud.isLiveScanPage());
+            if (!isPublic && hardRedirect) {
+              clearSession();
+              var next = encodeURIComponent(
+                (window.location.pathname.split("/").pop() || "dashboard.html") + (window.location.search || "")
+              );
+              window.location.replace("login.html?next=" + next);
+            }
+            return Promise.reject(body || { ok: false, code: "AUTH_REQUIRED" });
+          });
+        }
+        if (response.ok) markNetworkDegraded(false);
+        return response;
+      })
+      .catch(function (err) {
+        if (isNetworkError(err)) markNetworkDegraded(true);
+        return Promise.reject(err);
+      });
   }
 
   function ready() {
-    return apiFetch("/api/host")
+    return apiFetch("/api/host", { skipAuthRedirect: true, silentAuth: true, timeoutMs: 8000 })
       .then(function (response) {
         return response.json();
       })
@@ -200,23 +277,63 @@
         return cache;
       })
       .catch(function () {
+        markNetworkDegraded(true);
         if (!shareOrigin) shareOrigin = window.location.origin;
         return cache;
       });
   }
 
+  function syncBackoffMs() {
+    if (global.navigator && global.navigator.onLine === false) return 20000;
+    if (networkDegraded) return 12000;
+    return 0;
+  }
+
   /** Pull latest attendance from server (TA scans, second device) without /api/host round-trip. */
   function syncFromServer() {
-    return apiFetch("/api/state", { skipAuthRedirect: true, silentAuth: true })
+    var now = Date.now();
+    var wait = syncCooldownUntil - now;
+    if (wait > 0) return Promise.resolve(cache);
+    if (syncInFlight) return syncInFlight;
+    syncInFlight = apiFetch("/api/state", {
+      skipAuthRedirect: true,
+      silentAuth: true,
+      timeoutMs: 10000
+    })
       .then(function (response) {
         return response.json();
       })
       .then(function (state) {
         if (state && typeof state === "object" && !state.public) applyState(state);
+        markNetworkDegraded(false);
+        syncCooldownUntil = Date.now() + 1200;
         return cache;
       })
       .catch(function () {
+        markNetworkDegraded(true);
+        syncCooldownUntil = Date.now() + syncBackoffMs() || 8000;
         return cache;
+      })
+      .then(function (result) {
+        syncInFlight = null;
+        return result;
+      });
+    return syncInFlight;
+  }
+
+  function softReconnect() {
+    markNetworkDegraded(false);
+    syncCooldownUntil = 0;
+    return syncFromServer()
+      .then(function () {
+        return flushPendingAttendanceScans();
+      })
+      .then(function () {
+        return validateSession({ soft: true });
+      })
+      .catch(function () {
+        markNetworkDegraded(true);
+        return { ok: false, code: "NETWORK" };
       });
   }
 
@@ -1059,8 +1176,11 @@
   }
 
   if (typeof window !== "undefined") {
+    window.addEventListener("offline", function () {
+      markNetworkDegraded(true);
+    });
     window.addEventListener("online", function () {
-      flushPendingAttendanceScans();
+      softReconnect();
     });
   }
 
@@ -1144,19 +1264,9 @@
     label = label.trim() || "this programme";
     var lvl = level != null && level !== "" ? Number(level) : null;
     if (lvl != null && !isNaN(lvl)) {
-      return (
-        "Students at Level " +
-        lvl +
-        " on " +
-        label +
-        " open this link once to join the programme roster (one QR for attendance in all your classes)."
-      );
+      return "Level " + lvl + " · " + label;
     }
-    return (
-      "Students on " +
-      label +
-      " open this link once to join the programme roster (one QR for attendance in all your classes)."
-    );
+    return label;
   }
 
   function scanShareUrl(token) {
@@ -1864,6 +1974,8 @@
 
   function requireLecturerSession() {
     var session = getSession();
+    if (session && session.lecturer && session.token) return session;
+    if (global.navigator && global.navigator.onLine === false) return session || null;
     if (!session || !session.lecturer || !session.token) {
       clearSession();
       window.location.replace(loginRedirectUrl());
@@ -1872,12 +1984,26 @@
     return session;
   }
 
-  function validateSession() {
-    return fetch(apiUrl("/api/auth/me"), {
-      method: "GET",
-      headers: authHeaders(),
-      credentials: "same-origin"
-    })
+  function validateSession(options) {
+    options = options || {};
+    var local = getSession();
+    if (global.navigator && global.navigator.onLine === false && local && local.token) {
+      return Promise.resolve({
+        ok: true,
+        offline: true,
+        lecturer: local.lecturer,
+        token: local.token
+      });
+    }
+    return fetchWithTimeout(
+      apiUrl("/api/auth/me"),
+      {
+        method: "GET",
+        headers: authHeaders(),
+        credentials: "same-origin"
+      },
+      options.timeoutMs || API_TIMEOUT_MS
+    )
       .then(function (response) {
         return response.json().then(function (body) {
           return { status: response.status, body: body };
@@ -1885,14 +2011,24 @@
       })
       .then(function (pack) {
         if (!pack.body || !pack.body.ok) {
-          if (pack.status === 401) clearSession();
+          if (pack.status === 401) markNetworkDegraded(true);
+          if (local && local.token && local.lecturer) {
+            return {
+              ok: true,
+              offline: true,
+              stale: pack.status === 401,
+              lecturer: local.lecturer,
+              token: local.token
+            };
+          }
           return {
             ok: false,
             code: pack.status === 401 ? "AUTH_REQUIRED" : "AUTH_CHECK_FAILED",
             error: (pack.body && pack.body.error) || "Please sign in."
           };
         }
-        var session = getSession() || {};
+        markNetworkDegraded(false);
+        var session = local || {};
         session.lecturer = pack.body.lecturer || session.lecturer;
         if (pack.body.programmeIds) session.programmeIds = pack.body.programmeIds;
         if (pack.body.expiresAt) session.expiresAt = pack.body.expiresAt;
@@ -1902,9 +2038,9 @@
         return pack.body;
       })
       .catch(function () {
-        var session = getSession();
-        if (session && session.token && session.lecturer) {
-          return { ok: true, offline: true, lecturer: session.lecturer, token: session.token };
+        markNetworkDegraded(true);
+        if (local && local.token && local.lecturer) {
+          return { ok: true, offline: true, lecturer: local.lecturer, token: local.token };
         }
         return { ok: false, error: connectionHint(), code: "NETWORK" };
       });
@@ -2132,6 +2268,9 @@
     load: load,
     ready: ready,
     syncFromServer: syncFromServer,
+    softReconnect: softReconnect,
+    isNetworkDegraded: isNetworkDegraded,
+    pendingScanCount: pendingScanCount,
     connectionHint: connectionHint,
     classById: classById,
     studentsFor: studentsFor,

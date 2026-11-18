@@ -643,12 +643,9 @@
   function syncFacingUi() {
     var Hud = window.AttendifyScannerHud;
     if (!Hud) return;
-    Hud.updateCameraFacingBadge(document.getElementById("scan-camera-facing-badge"), cameraFacing);
-    Hud.setFacingButtonStates(
-      document.getElementById("btn-camera-front"),
-      document.getElementById("btn-camera-back"),
-      cameraFacing
-    );
+    if (Hud.setFacingButtonStates) {
+      Hud.setFacingButtonStates(null, null, cameraFacing);
+    }
   }
 
   function applyCameraFacing(next) {
@@ -1035,16 +1032,13 @@
     var syncTick = 0;
     setInterval(function () {
       syncTick += 1;
+      var degraded = Attendify.isNetworkDegraded && Attendify.isNetworkDegraded();
       var scanning = isScannerOpen();
       var live = scanning || isLiveWeekSession();
-      if (scanning) {
-        if (syncTick % 2 !== 0) return;
-        refreshAttendanceFromServer();
-        return;
-      }
-      if (!live && syncTick % 5 !== 0) return;
+      var cadence = degraded ? 6 : scanning ? 2 : live ? 4 : 8;
+      if (syncTick % cadence !== 0) return;
       refreshAttendanceFromServer();
-    }, 1000);
+    }, 3000);
 
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden && (isScannerOpen() || isLiveWeekSession())) {
