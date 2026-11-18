@@ -53,16 +53,9 @@
 
   function connectionHint() {
     if (window.location.protocol === "file:") {
-      return "Unable to connect. Open Attendify in your browser at the address from node server.js (not by opening the HTML file directly).";
+      return "No connection. Open Attendify from your server link.";
     }
-    if (window.location.protocol !== "file:" && window.location.origin) {
-      return (
-        "Unable to connect to the server at " +
-        window.location.origin +
-        ". Run node server.js in the project folder and open that same address."
-      );
-    }
-    return "Unable to connect right now. Run node server.js and open the Local or Network URL it prints.";
+    return "Connection lost. Check Wi‑Fi and try again.";
   }
 
   function seedStudents() {

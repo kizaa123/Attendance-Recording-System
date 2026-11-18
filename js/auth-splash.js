@@ -3,24 +3,31 @@
   var HOLD_AT_FULL_MS = 320;
   var FADE_OUT_MS = 200;
 
-  function loginUrl() {
+  function afterSplashUrl() {
+    if (window.AttendifyAuthEntry && AttendifyAuthEntry.portalAfterSplashHref) {
+      return AttendifyAuthEntry.portalAfterSplashHref();
+    }
     if (window.AttendifyAuthEntry && AttendifyAuthEntry.loginAfterSplashHref) {
       return AttendifyAuthEntry.loginAfterSplashHref();
     }
     return "login.html?from=splash";
   }
 
-  function skipToLogin() {
-    window.location.replace(loginUrl());
+  function isPortalDestination(href) {
+    return /dashboard\.html/i.test(String(href || ""));
+  }
+
+  function skipAfterSplash() {
+    window.location.replace(afterSplashUrl());
   }
 
   if (window.AttendifyAuthEntry && !AttendifyAuthEntry.isMobileAuth()) {
-    skipToLogin();
+    skipAfterSplash();
     return;
   }
 
   if (window.matchMedia("(min-width: 1024px)").matches) {
-    skipToLogin();
+    skipAfterSplash();
     return;
   }
 
@@ -42,18 +49,25 @@
     document.documentElement.style.setProperty("--auth-splash-fade-ms", fadeMs + "ms");
   } catch (e) {}
 
-  function goLogin() {
+  function leaveSplash() {
+    var dest = afterSplashUrl();
+    var splashParams = new URLSearchParams(window.location.search || "");
     try {
-      var splashParams = new URLSearchParams(window.location.search || "");
-      sessionStorage.setItem(
-        "attendify_auth_mode",
-        splashParams.get("mode") === "signup" ? "signup" : "signin"
-      );
+      if (!isPortalDestination(dest)) {
+        sessionStorage.setItem(
+          "attendify_auth_mode",
+          splashParams.get("mode") === "signup" ? "signup" : "signin"
+        );
+      }
     } catch (e) {}
-    if (window.AttendifyPageTransitions && AttendifyPageTransitions.markSplashEnter) {
-      AttendifyPageTransitions.markSplashEnter();
+    if (window.AttendifyPageTransitions) {
+      if (isPortalDestination(dest) && AttendifyPageTransitions.markPortalEnter) {
+        AttendifyPageTransitions.markPortalEnter();
+      } else if (AttendifyPageTransitions.markSplashEnter) {
+        AttendifyPageTransitions.markSplashEnter();
+      }
     }
-    window.location.replace(loginUrl());
+    window.location.replace(dest);
   }
 
   function setProgress(percent) {
@@ -62,7 +76,7 @@
   }
 
   if (!splash) {
-    goLogin();
+    leaveSplash();
     return;
   }
 
@@ -84,6 +98,6 @@
     if (title) title.classList.remove("auth-splash__title--loading");
     splash.classList.add("auth-splash--hide");
     splash.setAttribute("aria-busy", "false");
-    window.setTimeout(goLogin, Math.max(fadeMs, 120));
+    window.setTimeout(leaveSplash, Math.max(fadeMs, 120));
   }, fillMs + holdMs);
 })();

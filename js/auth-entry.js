@@ -1,6 +1,19 @@
 (function (win) {
+  var SESSION_KEY = "attendify-session";
+
   function isMobileAuth() {
     return win.matchMedia("(max-width: 1023px)").matches;
+  }
+
+  function hasStoredLecturerSession() {
+    try {
+      var raw = win.sessionStorage.getItem(SESSION_KEY) || win.localStorage.getItem(SESSION_KEY);
+      if (!raw) return false;
+      var session = JSON.parse(raw);
+      return !!(session && session.token && session.lecturer);
+    } catch (e) {
+      return false;
+    }
   }
 
   function mobileSplashHref(search) {
@@ -18,6 +31,27 @@
     }
     var qs = params.toString();
     return "login.html" + (qs ? "?" + qs : "?from=splash");
+  }
+
+  function portalAfterSplashHref() {
+    if (hasStoredLecturerSession()) {
+      var params = new URLSearchParams(win.location.search || "");
+      params.delete("splash");
+      params.set("from", "splash");
+      var next = params.get("next");
+      if (next) {
+        try {
+          next = decodeURIComponent(next);
+        } catch (e) {
+          next = "";
+        }
+        if (/^[a-zA-Z0-9._-]+\.html(\?[a-zA-Z0-9._=&%-]*)?$/.test(next)) {
+          return next;
+        }
+      }
+      return "dashboard.html?from=splash";
+    }
+    return loginAfterSplashHref();
   }
 
   function gateLoginToSplash() {
@@ -45,6 +79,10 @@
       win.location.replace(mobileSplashHref(legacy ? "?" + legacy : ""));
       return;
     }
+    if (hasStoredLecturerSession() && params.get("mode") !== "signup") {
+      win.location.replace("dashboard.html");
+      return;
+    }
     var ref = String(document.referrer || "");
     if (ref.indexOf("splash.html") !== -1) return;
     win.location.replace(mobileSplashHref(win.location.search + win.location.hash));
@@ -57,8 +95,10 @@
 
   win.AttendifyAuthEntry = {
     isMobileAuth: isMobileAuth,
+    hasStoredLecturerSession: hasStoredLecturerSession,
     mobileSplashHref: mobileSplashHref,
     loginAfterSplashHref: loginAfterSplashHref,
+    portalAfterSplashHref: portalAfterSplashHref,
     gateLoginToSplash: gateLoginToSplash,
     signInEntryHref: signInEntryHref
   };

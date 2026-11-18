@@ -3,8 +3,9 @@
   var hudDismissTimer = null;
   var HUD_DISMISS_MS = 2600;
   var HUD_DISMISS_VERIFIED_MS = 3400;
-  var SCAN_DEDUPE_MS = 260;
+  var SCAN_DEDUPE_MS = 45;
   var audioCtx = null;
+  var barcodeBoostStop = {};
 
   function clearHudDismissTimer() {
     if (hudDismissTimer) {
@@ -286,9 +287,73 @@
     }
   }
 
+  function stopBarcodeBoost(readerId) {
+    readerId = readerId || "qr-reader";
+    if (barcodeBoostStop[readerId]) {
+      barcodeBoostStop[readerId]();
+      delete barcodeBoostStop[readerId];
+    }
+  }
+
+  function startBarcodeBoost(readerId, onScan) {
+    readerId = readerId || "qr-reader";
+    stopBarcodeBoost(readerId);
+    if (typeof onScan !== "function") return;
+    if (typeof global.BarcodeDetector === "undefined") return;
+
+    var detector;
+    try {
+      detector = new global.BarcodeDetector({ formats: ["qr_code"] });
+    } catch (e) {
+      return;
+    }
+
+    var lastText = "";
+    var lastAt = 0;
+    var rafId = 0;
+    var busy = false;
+
+    function findVideo() {
+      var host = document.getElementById(readerId);
+      return host ? host.querySelector("video") : null;
+    }
+
+    function loop() {
+      rafId = global.requestAnimationFrame(loop);
+      if (busy) return;
+      var video = findVideo();
+      if (!video || video.readyState < 2 || video.videoWidth < 32) return;
+      busy = true;
+      detector
+        .detect(video)
+        .then(function (codes) {
+          if (!codes || !codes.length) return;
+          var text = String(codes[0].rawValue || "").trim();
+          if (!text) return;
+          var now = Date.now();
+          if (text === lastText && now - lastAt < SCAN_DEDUPE_MS) return;
+          lastText = text;
+          lastAt = now;
+          onScan(text);
+        })
+        .catch(function () {})
+        .then(function () {
+          busy = false;
+        });
+    }
+
+    rafId = global.requestAnimationFrame(loop);
+    barcodeBoostStop[readerId] = function () {
+      if (rafId) global.cancelAnimationFrame(rafId);
+      rafId = 0;
+      busy = false;
+    };
+  }
+
   /** Stop scanner and clear the reader DOM so a new instance can attach. */
   function releaseCamera(scanner, readerId) {
     readerId = readerId || "qr-reader";
+    stopBarcodeBoost(readerId);
     if (!scanner) {
       prepareQrReader(readerId);
       return Promise.resolve();
@@ -368,7 +433,7 @@
         if (callback) callback(false);
         return;
       }
-      setTimeout(tick, 45);
+      setTimeout(tick, 25);
     })();
   }
 
@@ -387,27 +452,27 @@
     var h = viewfinderHeight > 0 ? viewfinderHeight : 240;
     if (fullFrame) {
       return {
-        width: Math.max(200, Math.floor(w * 0.98)),
-        height: Math.max(150, Math.floor(h * 0.98))
+        width: Math.max(220, Math.floor(w)),
+        height: Math.max(160, Math.floor(h))
       };
     }
     var edge = Math.min(w, h);
-    var size = Math.max(200, Math.floor(edge * 0.9));
+    var size = Math.max(220, Math.floor(edge * 0.94));
     return { width: size, height: size };
   }
 
   /** @param {{ fullFrame?: boolean }} options */
   function getCameraConfig(options) {
     options = options || {};
-    var fullFrame = options.fullFrame !== false;
     var cfg = {
-      fps: 30,
-      disableFlip: false,
-      qrbox: function (viewfinderWidth, viewfinderHeight) {
-        return qrboxSizing(viewfinderWidth, viewfinderHeight, fullFrame);
-      },
-      aspectRatio: 1.333
+      fps: 60,
+      disableFlip: false
     };
+    if (options.compactQrbox) {
+      cfg.qrbox = function (viewfinderWidth, viewfinderHeight) {
+        return qrboxSizing(viewfinderWidth, viewfinderHeight, false);
+      };
+    }
     if (typeof Html5QrcodeSupportedFormats !== "undefined") {
       cfg.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
     }
@@ -417,24 +482,31 @@
   function softVideoResolution(constraint) {
     var base =
       constraint && typeof constraint === "object" ? Object.assign({}, constraint) : { facingMode: constraint || "environment" };
-    base.width = { ideal: 1280, min: 640 };
-    base.height = { ideal: 720, min: 480 };
-    base.frameRate = { ideal: 30, min: 15, max: 60 };
+    base.width = { ideal: 1920, min: 720 };
+    base.height = { ideal: 1080, min: 480 };
+    base.focusMode = { ideal: "continuous" };
+    base.frameRate = { ideal: 60, min: 24, max: 60 };
     return base;
   }
 
   function buildCameraStartPlans(facing) {
-    var facingAttempts = getCameraConstraintAttempts(facing);
-    var plans = [];
-    facingAttempts.forEach(function (video) {
-      plans.push({ video: video, config: getCameraConfig({ fullFrame: true }), experimental: true });
-    });
-    facingAttempts.forEach(function (video) {
-      plans.push({ video: video, config: getCameraConfig({ fullFrame: false }), experimental: true });
-    });
-    facingAttempts.forEach(function (video) {
-      plans.push({ video: softVideoResolution(video), config: getCameraConfig({ fullFrame: true }), experimental: false });
-    });
+    var primary = facing === "user" ? "user" : "environment";
+    var alt = primary === "user" ? "environment" : "user";
+    var plans = [
+      { video: { facingMode: { ideal: primary } }, config: getCameraConfig({}), experimental: true },
+      { video: { facingMode: primary }, config: getCameraConfig({}), experimental: true },
+      {
+        video: softVideoResolution({ facingMode: { ideal: primary } }),
+        config: getCameraConfig({}),
+        experimental: true
+      },
+      { video: { facingMode: { ideal: alt } }, config: getCameraConfig({}), experimental: true },
+      {
+        video: softVideoResolution({ facingMode: primary }),
+        config: getCameraConfig({ compactQrbox: true }),
+        experimental: false
+      }
+    ];
     return plans;
   }
 
@@ -531,6 +603,7 @@
               node.style.colorScheme = "light";
             });
           }
+          startBarcodeBoost(readerId, onScan);
           return {
             scanner: instance,
             attempt: index,

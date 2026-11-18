@@ -1085,12 +1085,16 @@ Attendify.ready().then(function () {
     if (document.hidden) return;
     dashSyncTick += 1;
     var scanning = scannerModal && !scannerModal.classList.contains("hidden");
-    if (!scanning && dashSyncTick % 4 !== 0) return;
+    if (scanning) {
+      if (dashSyncTick % 2 !== 0) return;
+      Attendify.syncFromServer().then(function () {
+        renderLive();
+      });
+      return;
+    }
+    if (dashSyncTick % 5 !== 0) return;
     Attendify.syncFromServer().then(function () {
       renderDashboard();
-      if (scanning) {
-        renderLive();
-      }
     });
   }, 1000);
 

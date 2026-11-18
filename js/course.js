@@ -1023,8 +1023,14 @@
     var syncTick = 0;
     setInterval(function () {
       syncTick += 1;
-      var live = isScannerOpen() || isLiveWeekSession();
-      if (!live && syncTick % 4 !== 0) return;
+      var scanning = isScannerOpen();
+      var live = scanning || isLiveWeekSession();
+      if (scanning) {
+        if (syncTick % 2 !== 0) return;
+        refreshAttendanceFromServer();
+        return;
+      }
+      if (!live && syncTick % 5 !== 0) return;
       refreshAttendanceFromServer();
     }, 1000);
 

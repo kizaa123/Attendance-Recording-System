@@ -259,7 +259,7 @@
         showLoginError(
           typeof Attendify !== "undefined" && Attendify.connectionHint
             ? Attendify.connectionHint()
-            : "Could not reach the server. Start Attendify with node server.js and use the same address in your browser."
+            : "Connection lost. Check Wi‑Fi and try again."
         );
       });
     });

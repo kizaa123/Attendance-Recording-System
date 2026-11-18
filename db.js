@@ -1588,7 +1588,35 @@ function addStudent(input) {
     )
     .get(classId, index, input.id || "");
 
-  if (duplicate) return { ok: false, error: "That index number is already registered in this class." };
+  if (duplicate) {
+    const existingRow = db
+      .prepare(
+        `SELECT id, class_id AS classId, name, index_number AS studentIndex, email, photo, source,
+                qr_public_id AS qrPublicId, created_at AS createdAt, level AS level
+         FROM students WHERE class_id = ? AND index_number = ? COLLATE NOCASE LIMIT 1`
+      )
+      .get(classId, index);
+    if (existingRow && String(input.source || "") === "link") {
+      return {
+        ok: true,
+        alreadyRegistered: true,
+        student: {
+          id: existingRow.id,
+          classId: existingRow.classId,
+          name: existingRow.name,
+          index: existingRow.studentIndex,
+          email: existingRow.email,
+          photo: existingRow.photo,
+          source: existingRow.source,
+          qrPublicId: existingRow.qrPublicId,
+          createdAt: existingRow.createdAt,
+          level: existingRow.level != null ? Number(existingRow.level) : null
+        },
+        state: stateForActor(input)
+      };
+    }
+    return { ok: false, error: "That index number is already registered in this class." };
+  }
 
   let student;
   if (input.id) {

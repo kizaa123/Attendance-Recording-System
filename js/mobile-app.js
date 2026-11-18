@@ -1,7 +1,6 @@
 (function (win) {
   var STANDALONE_CLASS = "attendify-standalone";
-  var STANDALONE_CSS = "/css/standalone.css?v=1";
-  var PTR_THRESHOLD = 68;
+  var STANDALONE_CSS = "/css/standalone.css?v=2";
 
   function isStandalone() {
     try {
@@ -111,134 +110,6 @@
         document.documentElement.setAttribute("data-attendify-app", "standalone");
       }
     } catch (_) {}
-  }
-
-  function scrollRoot() {
-    return document.scrollingElement || document.documentElement;
-  }
-
-  function scrollTop() {
-    var root = scrollRoot();
-    return root ? root.scrollTop : 0;
-  }
-
-  function hardRefresh() {
-    var done = function () {
-      try {
-        win.location.reload();
-      } catch (_) {
-        win.location.href = win.location.href;
-      }
-    };
-    if (!("caches" in win)) {
-      done();
-      return;
-    }
-    win.caches
-      .keys()
-      .then(function (keys) {
-        return Promise.all(
-          keys.map(function (key) {
-            return win.caches.delete(key);
-          })
-        );
-      })
-      .then(done)
-      .catch(done);
-  }
-
-  function initPullToRefresh() {
-    if (!isStandalone() && !isMobileViewport()) return;
-    if (document.body && document.body.classList.contains("auth-splash-page")) return;
-
-    var root = document.createElement("div");
-    root.className = "attendify-ptr-root";
-    root.setAttribute("aria-hidden", "true");
-    root.innerHTML =
-      '<div class="attendify-ptr-chip">' +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
-      '<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v6h6M20 20v-6h-6"/>' +
-      '<path stroke-linecap="round" stroke-linejoin="round" d="M5 19a9 9 0 0114-7.5M19 5a9 9 0 00-14 7.5"/>' +
-      "</svg>" +
-      '<span class="attendify-ptr-label">Pull to refresh</span></div>';
-    document.body.appendChild(root);
-
-    var label = root.querySelector(".attendify-ptr-label");
-    var startY = 0;
-    var pulling = false;
-    var armed = false;
-
-    function canPull() {
-      if (document.body.classList.contains("auth-programme-sheet-open")) return false;
-      var modalOpen = document.querySelector(
-        "#scannerModal:not(.hidden), .auth-programme-mobile-sheet:not([hidden])"
-      );
-      if (modalOpen) return false;
-      return scrollTop() <= 1;
-    }
-
-    document.addEventListener(
-      "touchstart",
-      function (e) {
-        if (!canPull() || !e.touches || !e.touches.length) return;
-        startY = e.touches[0].clientY;
-        pulling = true;
-        armed = false;
-      },
-      { passive: true }
-    );
-
-    document.addEventListener(
-      "touchmove",
-      function (e) {
-        if (!pulling || !e.touches || !e.touches.length) return;
-        if (!canPull()) {
-          pulling = false;
-          root.classList.remove("is-visible", "is-pulling", "is-ready");
-          return;
-        }
-        var dy = e.touches[0].clientY - startY;
-        if (dy <= 0) {
-          root.classList.remove("is-visible", "is-pulling", "is-ready");
-          return;
-        }
-        if (dy > 12) armed = true;
-        var clamped = Math.min(dy, PTR_THRESHOLD + 24);
-        var progress = Math.min(1, clamped / PTR_THRESHOLD);
-        root.classList.add("is-pulling", "is-visible");
-        root.style.transform = "translateY(" + (clamped * 0.45 - 40) + "px)";
-        root.style.opacity = String(0.35 + progress * 0.65);
-        root.classList.toggle("is-ready", dy >= PTR_THRESHOLD);
-        if (label) {
-          label.textContent = dy >= PTR_THRESHOLD ? "Release to refresh" : "Pull to refresh";
-        }
-        if (armed && dy > 8) {
-          try {
-            e.preventDefault();
-          } catch (_) {}
-        }
-      },
-      { passive: false }
-    );
-
-    function endPull() {
-      if (!pulling) return;
-      pulling = false;
-      var ready = root.classList.contains("is-ready");
-      root.classList.remove("is-pulling", "is-ready");
-      root.style.transform = "";
-      root.style.opacity = "";
-      if (ready) {
-        root.classList.add("is-visible", "is-refreshing");
-        if (label) label.textContent = "Refreshing…";
-        win.setTimeout(hardRefresh, 180);
-      } else {
-        root.classList.remove("is-visible");
-      }
-    }
-
-    document.addEventListener("touchend", endPull, { passive: true });
-    document.addEventListener("touchcancel", endPull, { passive: true });
   }
 
   var deferredInstallPrompt = null;
@@ -389,7 +260,6 @@
     loadStandaloneStyles();
     registerServiceWorker();
     captureInstallPrompt();
-    initPullToRefresh();
     if (document.getElementById("btn-pwa-install")) initInstallPage();
   }
 
@@ -404,7 +274,6 @@
     isIos: isIos,
     isAndroid: isAndroid,
     promptInstall: promptInstall,
-    showManualInstallHelp: showManualInstallHelp,
-    hardRefresh: hardRefresh
+    showManualInstallHelp: showManualInstallHelp
   };
 })(window);
