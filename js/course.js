@@ -494,15 +494,10 @@
   }
 
   function onScan(text) {
-    var now = Date.now();
-    var dedupe = (window.AttendifyScannerHud && AttendifyScannerHud.SCAN_DEDUPE_MS) || 260;
-    if (text === lastCode && now - lastScanAt < dedupe) return;
-    lastCode = text;
-    lastScanAt = now;
     var parsed = Attendify.parseQr(text);
     var qrToken = parsed && parsed.qrToken ? parsed.qrToken : null;
     var index = parsed && parsed.index ? parsed.index : !qrToken ? text : null;
-    Attendify.markPresent(programmeId, index, qrToken, lectureLabel, selectedWeek).then(handleScanResult);
+    return Attendify.markPresent(programmeId, index, qrToken, lectureLabel, selectedWeek).then(handleScanResult);
   }
 
   function persistLiveScanFromCourse(week) {

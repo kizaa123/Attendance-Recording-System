@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/js/tailwind-dashboard.js"></script>
-  <link rel="stylesheet" href="/css/style.css?v=27">
+  <link rel="stylesheet" href="/css/style.css?v=29">
   <style>
     body { font-family: "Plus Jakarta Sans", sans-serif; }
     .material-symbols-outlined {
@@ -122,6 +122,15 @@
               </div>
             </div>
           </div>
+          <form id="ta-scan-manual-form" class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm" autocomplete="off">
+            <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Quick entry</p>
+            <p class="text-[11px] text-slate-500 mt-0.5 mb-2">Last four digits of index (e.g. 0001).</p>
+            <div class="flex gap-2 items-stretch">
+              <input id="ta-scan-manual-suffix" name="suffix" inputmode="numeric" pattern="[0-9]{1,4}" maxlength="4" required placeholder="0001" class="flex-1 min-w-0 px-3 py-2 text-sm font-mono font-bold border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500"/>
+              <button type="submit" class="shrink-0 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold">Scanned</button>
+            </div>
+            <p id="ta-scan-manual-error" class="hidden mt-2 text-[11px] text-rose-600 font-medium"></p>
+          </form>
           <div id="ta-verified-box" class="hidden"></div>
         </div>
 
@@ -195,7 +204,7 @@
   </script>
   <script src="/js/scan-cache.js?v=1"></script>
   <script src="/js/store.js?v=38"></script>
-  <script src="/js/scanner-hud.js?v=32"></script>
+  <script src="/js/scanner-hud.js?v=34"></script>
   <script src="/js/mobile-app.js?v=3"></script>
   <script>
   (function () {
@@ -567,13 +576,7 @@
 
     // ─── Scan handling ────────────────────────────────────────────────────────
     function onScan(text) {
-      if (scanBusy) return;
-      var now = Date.now();
-      var dedupe = (window.AttendifyScannerHud && AttendifyScannerHud.SCAN_DEDUPE_MS) || 260;
-      if (text === lastCode && now - lastScanAt < dedupe) return;
-      lastCode = text;
-      lastScanAt = now;
-      submitScan(text);
+      return submitScan(text);
     }
 
     function attendancePayload(parsed, text) {
@@ -642,7 +645,7 @@
     }
 
     function submitScan(text) {
-      if (scanBusy) return;
+      if (scanBusy) return Promise.resolve();
       scanBusy = true;
       var parseFn =
         typeof Attendify !== "undefined" && Attendify.parseQr ? Attendify.parseQr : parseQrText;
@@ -655,10 +658,7 @@
         playTone("err");
         showToast("Not on this class roster.", "rose");
         scanBusy = false;
-        setTimeout(function () {
-          lastCode = "";
-        }, 800);
-        return;
+        return Promise.resolve();
       }
 
       var isDup = scannedStudents.some(function (s) {
@@ -681,17 +681,17 @@
       var payload = attendancePayload(parsed, text);
       if (isDup) {
         scanBusy = false;
-        return;
+        return Promise.resolve();
       }
 
       if (!navigator.onLine) {
         if (Cache) Cache.enqueue(taToken, payload);
         showToast("Saved on device. Will sync when online.", "amber");
         scanBusy = false;
-        return;
+        return Promise.resolve();
       }
 
-      postAttendance(payload)
+      return postAttendance(payload)
         .then(function (result) {
           if (result && result.ok) {
             if (result.record && result.record.scannedAt) {
@@ -745,15 +745,14 @@
           return;
         }
         showToast(msg, "rose");
-        setTimeout(function () {
-          lastCode = "";
-        }, 800);
         return;
       }
       var student = result.student;
       var isDup = result.duplicate;
-      playTone(isDup ? "dup" : "ok");
-      showVerified(student, result.record.scannedAt, isDup);
+      if (!(isDup && taSuppressDuplicateHud(student.id))) {
+        playTone(isDup ? "dup" : "ok");
+        showVerified(student, result.record.scannedAt, isDup);
+      }
 
       if (!isDup) {
         scannedStudents.unshift({
@@ -803,8 +802,28 @@
         .catch(function () {});
     }
 
+    var taHudLast = { id: "", kind: "", at: 0 };
+    function taSuppressDuplicateHud(studentId) {
+      var now = Date.now();
+      var id = String(studentId || "");
+      if (!id) return false;
+      if (
+        taHudLast.id === id &&
+        taHudLast.kind === "ok" &&
+        now - taHudLast.at < 2800
+      ) {
+        return true;
+      }
+      return false;
+    }
+
     // ─── Verified banner ─────────────────────────────────────────────────────
     function showVerified(student, scannedAt, isDup) {
+      taHudLast = {
+        id: String(student.id || ""),
+        kind: isDup ? "dup" : "ok",
+        at: Date.now()
+      };
       var box = document.getElementById("ta-verified-box");
       var shell = isDup
         ? "bg-amber-50 border-amber-200"
@@ -987,6 +1006,43 @@
       submitScan(val);
       input.value = "";
     });
+
+    function resolveTaIndexSuffix(raw) {
+      var digits = String(raw || "").replace(/\D/g, "");
+      if (!digits.length || digits.length > 4) return null;
+      var suffix = digits.padStart(4, "0");
+      var matches = programmeStudents.filter(function (st) {
+        var tail = String(st.index || st.studentIndex || "")
+          .replace(/\D/g, "")
+          .slice(-4);
+        return tail === suffix;
+      });
+      if (matches.length === 1) return matches[0].index || matches[0].studentIndex;
+      return null;
+    }
+
+    var taScanManualForm = document.getElementById("ta-scan-manual-form");
+    if (taScanManualForm) {
+      taScanManualForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var errEl = document.getElementById("ta-scan-manual-error");
+        var input = document.getElementById("ta-scan-manual-suffix");
+        if (errEl) errEl.classList.add("hidden");
+        var index = resolveTaIndexSuffix(input ? input.value : "");
+        if (!index) {
+          if (errEl) {
+            errEl.textContent = "No student found for that suffix on this roster.";
+            errEl.classList.remove("hidden");
+          }
+          return;
+        }
+        submitScan(index);
+        if (input) {
+          input.value = "";
+          input.focus();
+        }
+      });
+    }
 
     // ─── Save / close session ─────────────────────────────────────────────────
     document.getElementById("btn-ta-save").addEventListener("click", function () {

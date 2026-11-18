@@ -33,27 +33,6 @@
     return "login.html" + (qs ? "?" + qs : "?from=splash");
   }
 
-  function portalAfterSplashHref() {
-    if (hasStoredLecturerSession()) {
-      var params = new URLSearchParams(win.location.search || "");
-      params.delete("splash");
-      params.set("from", "splash");
-      var next = params.get("next");
-      if (next) {
-        try {
-          next = decodeURIComponent(next);
-        } catch (e) {
-          next = "";
-        }
-        if (/^[a-zA-Z0-9._-]+\.html(\?[a-zA-Z0-9._=&%-]*)?$/.test(next)) {
-          return next;
-        }
-      }
-      return "dashboard.html?from=splash";
-    }
-    return loginAfterSplashHref();
-  }
-
   function gateLoginToSplash() {
     if (!isMobileAuth()) return;
     var params = new URLSearchParams(win.location.search || "");
@@ -79,10 +58,6 @@
       win.location.replace(mobileSplashHref(legacy ? "?" + legacy : ""));
       return;
     }
-    if (hasStoredLecturerSession() && params.get("mode") !== "signup") {
-      win.location.replace("dashboard.html");
-      return;
-    }
     var ref = String(document.referrer || "");
     if (ref.indexOf("splash.html") !== -1) return;
     win.location.replace(mobileSplashHref(win.location.search + win.location.hash));
@@ -98,7 +73,6 @@
     hasStoredLecturerSession: hasStoredLecturerSession,
     mobileSplashHref: mobileSplashHref,
     loginAfterSplashHref: loginAfterSplashHref,
-    portalAfterSplashHref: portalAfterSplashHref,
     gateLoginToSplash: gateLoginToSplash,
     signInEntryHref: signInEntryHref
   };

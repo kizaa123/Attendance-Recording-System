@@ -3,9 +3,13 @@
   var hudDismissTimer = null;
   var HUD_DISMISS_MS = 2600;
   var HUD_DISMISS_VERIFIED_MS = 3400;
-  var SCAN_DEDUPE_MS = 45;
+  var SCAN_DEDUPE_MS = 120;
+  var SCAN_GATE_REPEAT_MS = 3000;
+  var SCAN_BUSY_MIN_MS = 420;
+  var HUD_DUPLICATE_SUPPRESS_MS = 2800;
   var audioCtx = null;
   var barcodeBoostStop = {};
+  var lastHudFeedback = { studentId: "", kind: "", at: 0 };
 
   function clearHudDismissTimer() {
     if (hudDismissTimer) {
@@ -84,11 +88,23 @@
   function showVerified(student, scannedAt, duplicate) {
     var box = document.getElementById("scan-hud-verified");
     if (!box || !student) return;
+    var now = Date.now();
+    var sid = String(student.id || "");
+    if (
+      duplicate &&
+      sid &&
+      lastHudFeedback.studentId === sid &&
+      lastHudFeedback.kind === "ok" &&
+      now - lastHudFeedback.at < HUD_DUPLICATE_SUPPRESS_MS
+    ) {
+      return;
+    }
     clearHudDismissTimer();
     lastVerifiedStudentId = student.id;
     box.classList.remove("hidden");
     if (duplicate) playDuplicate();
     else playSuccess();
+    lastHudFeedback = { studentId: sid, kind: duplicate ? "dup" : "ok", at: now };
     var time = global.Attendify.formatTime(scannedAt);
     var shell = duplicate
       ? "bg-amber-50 border border-amber-200"
@@ -295,6 +311,52 @@
     }
   }
 
+  function scanTextKey(text) {
+    var raw = String(text || "").trim();
+    if (!raw) return "";
+    if (raw.indexOf("ATTENDIFY:v1:") === 0) return raw.slice(0, 96);
+    return raw.slice(0, 140);
+  }
+
+  function createAsyncScanGate(onScan) {
+    var busy = false;
+    var busySince = 0;
+    var lastKey = "";
+    var lastAt = 0;
+
+    return function gatedScan(text) {
+      if (typeof onScan !== "function") return;
+      var key = scanTextKey(text);
+      if (!key) return;
+      var now = Date.now();
+      if (busy && now - busySince < 8000) return;
+      if (key === lastKey && now - lastAt < SCAN_GATE_REPEAT_MS) return;
+      lastKey = key;
+      lastAt = now;
+      busy = true;
+      busySince = now;
+
+      function release() {
+        var elapsed = Date.now() - busySince;
+        var wait = Math.max(0, SCAN_BUSY_MIN_MS - elapsed);
+        global.setTimeout(function () {
+          busy = false;
+        }, wait);
+      }
+
+      try {
+        var out = onScan(text);
+        if (out && typeof out.then === "function") {
+          out.then(release, release);
+        } else {
+          release();
+        }
+      } catch (e) {
+        release();
+      }
+    };
+  }
+
   function startBarcodeBoost(readerId, onScan) {
     readerId = readerId || "qr-reader";
     stopBarcodeBoost(readerId);
@@ -308,14 +370,85 @@
       return;
     }
 
-    var lastText = "";
-    var lastAt = 0;
     var rafId = 0;
     var busy = false;
+    var boostCanvas = null;
+    var boostCtx = null;
 
     function findVideo() {
       var host = document.getElementById(readerId);
       return host ? host.querySelector("video") : null;
+    }
+
+    function pickCode(codes) {
+      if (!codes || !codes.length) return "";
+      var best = codes[0];
+      var i;
+      for (i = 1; i < codes.length; i++) {
+        if ((codes[i].boundingBox && codes[i].boundingBox.width) > (best.boundingBox && best.boundingBox.width)) {
+          best = codes[i];
+        }
+      }
+      return String(best.rawValue || "").trim();
+    }
+
+    function ensureBoostCanvas() {
+      if (!boostCanvas) {
+        boostCanvas = document.createElement("canvas");
+        boostCtx = boostCanvas.getContext("2d", { willReadFrequently: true });
+      }
+    }
+
+    function drawVideoSharp(ctx, video, sx, sy, sw, sh, dw, dh) {
+      ctx.imageSmoothingEnabled = false;
+      try {
+        ctx.filter = "contrast(1.22) brightness(1.04)";
+      } catch (e) {}
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+      try {
+        ctx.filter = "none";
+      } catch (e2) {}
+    }
+
+    function detectScaled(video) {
+      var vw = video.videoWidth;
+      var vh = video.videoHeight;
+      var scale = Math.min(4, Math.max(2.1, 1680 / Math.max(vw, 320)));
+      ensureBoostCanvas();
+      boostCanvas.width = Math.floor(vw * scale);
+      boostCanvas.height = Math.floor(vh * scale);
+      if (!boostCtx) return detector.detect(video);
+      drawVideoSharp(boostCtx, video, 0, 0, vw, vh, boostCanvas.width, boostCanvas.height);
+      return detector.detect(boostCanvas);
+    }
+
+    function detectCenterZoom(video) {
+      var vw = video.videoWidth;
+      var vh = video.videoHeight;
+      var inset = 0.14;
+      var sx = Math.floor(vw * inset);
+      var sy = Math.floor(vh * inset);
+      var sw = Math.floor(vw * (1 - inset * 2));
+      var sh = Math.floor(vh * (1 - inset * 2));
+      var scale = Math.min(4.25, Math.max(2.6, 1520 / Math.max(sw, 240)));
+      ensureBoostCanvas();
+      boostCanvas.width = Math.floor(sw * scale);
+      boostCanvas.height = Math.floor(sh * scale);
+      if (!boostCtx) return global.Promise.resolve([]);
+      drawVideoSharp(boostCtx, video, sx, sy, sw, sh, boostCanvas.width, boostCanvas.height);
+      return detector.detect(boostCanvas);
+    }
+
+    function detectPassChain(video) {
+      return detectScaled(video)
+        .then(function (codes) {
+          if (codes && codes.length) return codes;
+          return detectCenterZoom(video);
+        })
+        .then(function (codes) {
+          if (codes && codes.length) return codes;
+          return detector.detect(video);
+        });
     }
 
     function loop() {
@@ -324,17 +457,10 @@
       var video = findVideo();
       if (!video || video.readyState < 2 || video.videoWidth < 32) return;
       busy = true;
-      detector
-        .detect(video)
+      detectPassChain(video)
         .then(function (codes) {
-          if (!codes || !codes.length) return;
-          var text = String(codes[0].rawValue || "").trim();
-          if (!text) return;
-          var now = Date.now();
-          if (text === lastText && now - lastAt < SCAN_DEDUPE_MS) return;
-          lastText = text;
-          lastAt = now;
-          onScan(text);
+          var text = pickCode(codes);
+          if (text) onScan(text);
         })
         .catch(function () {})
         .then(function () {
@@ -347,6 +473,8 @@
       if (rafId) global.cancelAnimationFrame(rafId);
       rafId = 0;
       busy = false;
+      boostCanvas = null;
+      boostCtx = null;
     };
   }
 
@@ -461,16 +589,17 @@
     return { width: size, height: size };
   }
 
-  /** @param {{ fullFrame?: boolean }} options */
+  /** @param {{ fullFrame?: boolean, compactQrbox?: boolean }} options */
   function getCameraConfig(options) {
     options = options || {};
     var cfg = {
       fps: 60,
       disableFlip: false
     };
-    if (options.compactQrbox) {
+    var useFullFrame = options.compactQrbox ? false : options.fullFrame !== false;
+    if (useFullFrame || options.compactQrbox) {
       cfg.qrbox = function (viewfinderWidth, viewfinderHeight) {
-        return qrboxSizing(viewfinderWidth, viewfinderHeight, false);
+        return qrboxSizing(viewfinderWidth, viewfinderHeight, useFullFrame);
       };
     }
     if (typeof Html5QrcodeSupportedFormats !== "undefined") {
@@ -482,10 +611,13 @@
   function softVideoResolution(constraint) {
     var base =
       constraint && typeof constraint === "object" ? Object.assign({}, constraint) : { facingMode: constraint || "environment" };
-    base.width = { ideal: 1920, min: 720 };
+    base.width = { ideal: 1920, min: 640 };
     base.height = { ideal: 1080, min: 480 };
     base.focusMode = { ideal: "continuous" };
-    base.frameRate = { ideal: 60, min: 24, max: 60 };
+    base.frameRate = { ideal: 30, min: 15, max: 30 };
+    try {
+      base.advanced = [{ focusMode: "continuous" }];
+    } catch (e) {}
     return base;
   }
 
@@ -493,14 +625,18 @@
     var primary = facing === "user" ? "user" : "environment";
     var alt = primary === "user" ? "environment" : "user";
     var plans = [
-      { video: { facingMode: { ideal: primary } }, config: getCameraConfig({}), experimental: true },
-      { video: { facingMode: primary }, config: getCameraConfig({}), experimental: true },
       {
         video: softVideoResolution({ facingMode: { ideal: primary } }),
         config: getCameraConfig({}),
         experimental: true
       },
-      { video: { facingMode: { ideal: alt } }, config: getCameraConfig({}), experimental: true },
+      { video: { facingMode: { ideal: primary } }, config: getCameraConfig({}), experimental: true },
+      { video: { facingMode: primary }, config: getCameraConfig({}), experimental: true },
+      {
+        video: softVideoResolution({ facingMode: { ideal: alt } }),
+        config: getCameraConfig({}),
+        experimental: true
+      },
       {
         video: softVideoResolution({ facingMode: primary }),
         config: getCameraConfig({ compactQrbox: true }),
@@ -576,6 +712,7 @@
     var facing = options.facing === "user" ? "user" : "environment";
     var onScan = options.onScan;
     if (typeof onScan !== "function") return Promise.reject(new Error("onScan required"));
+    var gatedOnScan = createAsyncScanGate(onScan);
     var plans = buildCameraStartPlans(facing);
 
     function runAttempt(index) {
@@ -592,7 +729,7 @@
       }
       if (options.onScanner) options.onScanner(instance);
       return instance
-        .start(plan.video, plan.config, onScan, function () {})
+        .start(plan.video, plan.config, gatedOnScan, function () {})
         .then(function () {
           var host = document.getElementById(readerId);
           armReaderForDarkModeSafe(host);
@@ -603,7 +740,7 @@
               node.style.colorScheme = "light";
             });
           }
-          startBarcodeBoost(readerId, onScan);
+          startBarcodeBoost(readerId, gatedOnScan);
           return {
             scanner: instance,
             attempt: index,
@@ -626,6 +763,8 @@
 
   global.AttendifyScannerHud = {
     SCAN_DEDUPE_MS: SCAN_DEDUPE_MS,
+    SCAN_GATE_REPEAT_MS: SCAN_GATE_REPEAT_MS,
+    createAsyncScanGate: createAsyncScanGate,
     showVerified: showVerified,
     hideVerified: hideVerified,
     showUnknown: showUnknown,

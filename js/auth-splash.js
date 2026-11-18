@@ -3,31 +3,24 @@
   var HOLD_AT_FULL_MS = 320;
   var FADE_OUT_MS = 200;
 
-  function afterSplashUrl() {
-    if (window.AttendifyAuthEntry && AttendifyAuthEntry.portalAfterSplashHref) {
-      return AttendifyAuthEntry.portalAfterSplashHref();
-    }
+  function loginUrl() {
     if (window.AttendifyAuthEntry && AttendifyAuthEntry.loginAfterSplashHref) {
       return AttendifyAuthEntry.loginAfterSplashHref();
     }
     return "login.html?from=splash";
   }
 
-  function isPortalDestination(href) {
-    return /dashboard\.html/i.test(String(href || ""));
-  }
-
-  function skipAfterSplash() {
-    window.location.replace(afterSplashUrl());
+  function skipToLogin() {
+    window.location.replace(loginUrl());
   }
 
   if (window.AttendifyAuthEntry && !AttendifyAuthEntry.isMobileAuth()) {
-    skipAfterSplash();
+    skipToLogin();
     return;
   }
 
   if (window.matchMedia("(min-width: 1024px)").matches) {
-    skipAfterSplash();
+    skipToLogin();
     return;
   }
 
@@ -49,25 +42,18 @@
     document.documentElement.style.setProperty("--auth-splash-fade-ms", fadeMs + "ms");
   } catch (e) {}
 
-  function leaveSplash() {
-    var dest = afterSplashUrl();
-    var splashParams = new URLSearchParams(window.location.search || "");
+  function goLogin() {
     try {
-      if (!isPortalDestination(dest)) {
-        sessionStorage.setItem(
-          "attendify_auth_mode",
-          splashParams.get("mode") === "signup" ? "signup" : "signin"
-        );
-      }
+      var splashParams = new URLSearchParams(window.location.search || "");
+      sessionStorage.setItem(
+        "attendify_auth_mode",
+        splashParams.get("mode") === "signup" ? "signup" : "signin"
+      );
     } catch (e) {}
-    if (window.AttendifyPageTransitions) {
-      if (isPortalDestination(dest) && AttendifyPageTransitions.markPortalEnter) {
-        AttendifyPageTransitions.markPortalEnter();
-      } else if (AttendifyPageTransitions.markSplashEnter) {
-        AttendifyPageTransitions.markSplashEnter();
-      }
+    if (window.AttendifyPageTransitions && AttendifyPageTransitions.markSplashEnter) {
+      AttendifyPageTransitions.markSplashEnter();
     }
-    window.location.replace(dest);
+    window.location.replace(loginUrl());
   }
 
   function setProgress(percent) {
@@ -76,7 +62,7 @@
   }
 
   if (!splash) {
-    leaveSplash();
+    goLogin();
     return;
   }
 
@@ -98,6 +84,6 @@
     if (title) title.classList.remove("auth-splash__title--loading");
     splash.classList.add("auth-splash--hide");
     splash.setAttribute("aria-busy", "false");
-    window.setTimeout(leaveSplash, Math.max(fadeMs, 120));
+    window.setTimeout(goLogin, Math.max(fadeMs, 120));
   }, fillMs + holdMs);
 })();
