@@ -22,28 +22,19 @@ let db;
 
 function seedState() {
   return {
-    activeClassId: "bsc-cs",
-    classes: [
-      { id: "bsc-cs", code: "BSc CS", name: "BSc Computer Science", department: "Computer Science" },
-      { id: "bsc-it", code: "BSc IT", name: "BSc Information Technology", department: "Information Technology" }
-    ],
-    students: [
-      { id: "s1", classId: "bsc-cs", name: "Elena Rostova", index: "CS2024-0012", email: "e.rostova@student.ac.edu", photo: "", source: "lecturer" },
-      { id: "s2", classId: "bsc-cs", name: "Marcus Adebayo", index: "CS2024-0089", email: "m.adebayo@student.ac.edu", photo: "", source: "lecturer" },
-      { id: "s3", classId: "bsc-cs", name: "Julian Lawrence", index: "CS2024-0104", email: "j.lawrence@student.ac.edu", photo: "", source: "link" },
-      { id: "s4", classId: "bsc-cs", name: "Mei Ling Chen", index: "CS2024-0122", email: "m.chen@student.ac.edu", photo: "", source: "link" },
-      { id: "s5", classId: "bsc-cs", name: "Siddharth Kumar", index: "CS2024-0138", email: "s.kumar@student.ac.edu", photo: "", source: "lecturer" },
-      { id: "s6", classId: "bsc-cs", name: "Ananya Banerjee", index: "CS2024-0152", email: "a.banerjee@student.ac.edu", photo: "", source: "link" }
-    ],
+    activeClassId: "",
+    classes: [],
+    students: [],
     sessions: {},
-    semester: { totalWeeks: 15, currentWeek: 8 },
+    semester: { totalWeeks: 15, currentWeek: 1 },
     courses: []
   };
 }
 
 function maybeCopyLocalDbToPersistentDisk() {
+  if (!process.env.RENDER || process.env.ATTENDIFY_COPY_LOCAL_DB !== "1") return;
   const localDb = path.join(root, "data", "attendify.db");
-  if (dbFile === localDb || !process.env.RENDER) return;
+  if (dbFile === localDb) return;
   try {
     if (!fs.existsSync(dbFile) && fs.existsSync(localDb)) {
       fs.mkdirSync(path.dirname(dbFile), { recursive: true });
@@ -68,6 +59,7 @@ function openDb() {
   initSchema();
   migrateLegacyJsonIfNeeded();
   seedIfEmpty();
+  purgeBundledDemoRosterIfPresent();
   return db;
 }
 
@@ -463,6 +455,41 @@ function seedIfEmpty() {
   const classCount = db.prepare("SELECT COUNT(*) AS n FROM classes").get().n;
   if (classCount > 0) return;
   importState(seedState());
+}
+
+/** Remove old bundled localhost demo roster (safe: only known seed ids). */
+function purgeBundledDemoRosterIfPresent() {
+  if (setting("bundledDemoPurged", "") === "1") return;
+  const demoStudentIds = ["s1", "s2", "s3", "s4", "s5", "s6"];
+  const placeholders = demoStudentIds.map(function () {
+    return "?";
+  }).join(",");
+  const hit = db
+    .prepare("SELECT COUNT(*) AS n FROM students WHERE id IN (" + placeholders + ")")
+    .get(...demoStudentIds).n;
+  if (!hit) {
+    setSetting("bundledDemoPurged", "1");
+    return;
+  }
+  try {
+    db.exec("BEGIN");
+    db.prepare("DELETE FROM attendance_records WHERE student_id IN (" + placeholders + ")").run(...demoStudentIds);
+    db.prepare("DELETE FROM students WHERE id IN (" + placeholders + ")").run(...demoStudentIds);
+    ["bsc-cs", "bsc-it", "cs101", "cs210"].forEach(function (classId) {
+      const row = db.prepare("SELECT id FROM classes WHERE id = ?").get(classId);
+      if (!row) return;
+      const st = db.prepare("SELECT COUNT(*) AS n FROM students WHERE class_id = ?").get(classId).n;
+      const lp = db.prepare("SELECT COUNT(*) AS n FROM lecturer_programmes WHERE class_id = ?").get(classId).n;
+      const co = db.prepare("SELECT COUNT(*) AS n FROM programme_courses WHERE class_id = ?").get(classId).n;
+      if (!st && !lp && !co) db.prepare("DELETE FROM classes WHERE id = ?").run(classId);
+    });
+    db.exec("COMMIT");
+    setSetting("bundledDemoPurged", "1");
+    console.log("Removed bundled demo roster from database.");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    console.warn("Could not purge bundled demo roster:", error.message);
+  }
 }
 
 function migrateLegacyJsonIfNeeded() {

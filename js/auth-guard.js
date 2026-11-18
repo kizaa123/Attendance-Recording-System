@@ -31,12 +31,16 @@
   var session = Attendify.getSession && Attendify.getSession();
   if (session && session.lecturer && session.token) {
     Attendify.validateSession().then(function (result) {
-      if (!result || !result.ok) bounce();
+      if (result && result.ok) return;
+      if (result && (result.offline || result.code === "NETWORK")) return;
+      bounce();
     });
     return;
   }
 
   Attendify.validateSession().then(function (result) {
-    if (!result || !result.ok) bounce();
+    if (result && result.ok) return;
+    if (result && (result.offline || result.code === "NETWORK")) return;
+    bounce();
   });
 })();

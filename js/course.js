@@ -450,6 +450,9 @@
   }
 
   function handleScanResult(result) {
+    if (result && result.ok && result.student && Attendify.mergeStudentIntoCache) {
+      Attendify.mergeStudentIntoCache(result.student);
+    }
     if (!result.ok) {
       if (
         window.AttendifyScannerHud &&
@@ -665,8 +668,13 @@
   }
 
   function flipCamera() {
+    var shell = document.getElementById("scan-camera-shell");
+    if (shell && shell.classList.contains("hidden")) {
+      launchScannerCamera();
+      return;
+    }
     if (!scanner && !cameraStarting) {
-      startCamera();
+      launchScannerCamera();
       return;
     }
     applyCameraFacing(cameraFacing === "environment" ? "user" : "environment");
@@ -674,20 +682,23 @@
 
   function openScannerCameraAfterLayout() {
     var Hud = window.AttendifyScannerHud;
+    if (Hud && Hud.prepareManualFirstScan) Hud.prepareManualFirstScan();
+    stopCamera();
+  }
+
+  function launchScannerCamera() {
+    var Hud = window.AttendifyScannerHud;
+    if (Hud && Hud.setScanCameraExpanded) Hud.setScanCameraExpanded(true);
     stopCamera().then(function () {
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
           function runStart() {
-            if (Hud && Hud.prefersTapToStartCamera && Hud.prefersTapToStartCamera()) {
-              hudScanMessage("Tap ↻ to start the camera.", "info", false);
-              return;
-            }
             startCamera();
           }
           if (Hud && Hud.whenHtml5QrcodeReady) {
             Hud.whenHtml5QrcodeReady(function (ok) {
               if (!ok) {
-                hudScanMessage("Scanner is still loading. Tap ↻ to start the camera.", "warning", false);
+                hudScanMessage("Scanner is still loading. Tap Open camera again.", "warning", false);
                 return;
               }
               setTimeout(runStart, 80);
@@ -790,6 +801,7 @@
     var shareBtn = document.getElementById("btn-share-access");
     if (shareBtn) shareBtn.classList.remove("hidden");
     scannerModal.classList.remove("hidden");
+    if (AttendifyScannerHud.beginLiveScanSession) AttendifyScannerHud.beginLiveScanSession();
     AttendifyScannerHud.hideVerified();
     renderTable();
     renderLive(selectedWeek);
@@ -807,6 +819,12 @@
 
   function closeScanner() {
     stopCamera();
+    if (window.AttendifyScannerHud && AttendifyScannerHud.prepareManualFirstScan) {
+      AttendifyScannerHud.prepareManualFirstScan();
+    }
+    if (window.AttendifyScannerHud && AttendifyScannerHud.endLiveScanSession) {
+      AttendifyScannerHud.endLiveScanSession();
+    }
     scannerModal.classList.add("hidden");
     persistLiveScanFromCourse(selectedWeek);
     Attendify.ready().then(function () {
@@ -961,10 +979,9 @@
     });
   }
   document.getElementById("btn-scan-flip").addEventListener("click", flipCamera);
-  var btnCamBack = document.getElementById("btn-camera-back");
-  var btnCamFront = document.getElementById("btn-camera-front");
-  if (btnCamBack) btnCamBack.addEventListener("click", function () { applyCameraFacing("environment"); });
-  if (btnCamFront) btnCamFront.addEventListener("click", function () { applyCameraFacing("user"); });
+  if (window.AttendifyScannerHud && AttendifyScannerHud.bindOpenCameraButton) {
+    AttendifyScannerHud.bindOpenCameraButton("btn-open-camera", launchScannerCamera);
+  }
   syncFacingUi();
 
   Attendify.ready().then(function () {

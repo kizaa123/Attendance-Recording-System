@@ -262,7 +262,10 @@
       </div>
       <div class="scanner-layout flex-1 flex flex-col md:flex-row md:gap-6 md:min-h-0 md:overflow-hidden">
         <div class="scanner-layout-camera flex flex-col gap-3 md:w-80 lg:w-96 md:shrink-0">
-          <div class="scan-camera-shell shadow-lg">
+          <button type="button" id="btn-open-camera" class="scan-open-camera-btn w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold shadow-md transition">
+            Scan
+          </button>
+          <div id="scan-camera-shell" class="scan-camera-shell shadow-lg hidden">
             <p class="scan-camera-label">Lecturer camera: scan student QR pass</p>
             <span class="scan-corner scan-corner-tl"></span>
             <span class="scan-corner scan-corner-tr"></span>
@@ -270,12 +273,8 @@
             <span class="scan-corner scan-corner-br"></span>
             <div id="qr-reader"></div>
             <div class="scan-frame-guide" aria-hidden="true"></div>
-            <span id="scan-camera-facing-badge" class="scan-camera-facing-pill absolute top-2 left-2 z-10">Back</span>
-            <div class="absolute bottom-3 inset-x-3 z-10 flex items-center justify-between gap-2 pointer-events-none">
-              <div class="pointer-events-auto flex items-center gap-1">
-                <button type="button" id="btn-camera-back" class="scan-camera-facing-btn is-active" aria-pressed="true" title="Back camera">Back</button>
-                <button type="button" id="btn-camera-front" class="scan-camera-facing-btn" aria-pressed="false" title="Front camera">Front</button>
-              </div>
+            <span id="scan-camera-facing-badge" class="scan-camera-facing-pill absolute top-2 left-2 z-10 hidden" aria-hidden="true">Back</span>
+            <div class="absolute bottom-3 inset-x-3 z-10 flex items-center justify-end gap-2 pointer-events-none">
               <div class="pointer-events-auto flex items-center gap-1">
                 <button type="button" id="btn-scan-flash" class="scan-camera-tool-btn" title="Flash (when supported)">
                   <span class="material-symbols-outlined" aria-hidden="true">flash_on</span>
@@ -319,12 +318,12 @@
   <script src="js/html5-qrcode.min.js"></script>
   <script src="js/page-transitions.js?v=1"></script>
   <script src="js/scan-cache.js?v=1"></script>
-  <script src="js/store.js?v=40"></script>
-  <script src="js/auth-guard.js?v=2"></script>
+  <script src="js/store.js?v=41"></script>
+  <script src="js/auth-guard.js?v=3"></script>
   <script src="js/student-list-ui.js?v=6"></script>
-  <script src="js/scanner-hud.js?v=34"></script>
+  <script src="js/scanner-hud.js?v=35"></script>
   <script src="js/sidebar.js?v=23"></script>
   <script src="/js/mobile-app.js?v=3"></script>
-  <script src="js/dashboard.js?v=30"></script>
+  <script src="js/dashboard.js?v=31"></script>
 </body>
 </html>

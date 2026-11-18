@@ -761,7 +761,48 @@
     });
   }
 
+  var liveScanOpenCount = 0;
+
+  function isLiveScanPage() {
+    return liveScanOpenCount > 0;
+  }
+
+  function setScanCameraExpanded(expanded) {
+    var shell = document.getElementById("scan-camera-shell");
+    var openBtn = document.getElementById("btn-open-camera");
+    if (shell) shell.classList.toggle("hidden", !expanded);
+    if (openBtn) openBtn.classList.toggle("hidden", expanded);
+  }
+
+  function beginLiveScanSession() {
+    liveScanOpenCount += 1;
+  }
+
+  function endLiveScanSession() {
+    liveScanOpenCount = Math.max(0, liveScanOpenCount - 1);
+  }
+
+  function prepareManualFirstScan() {
+    setScanCameraExpanded(false);
+  }
+
+  function bindOpenCameraButton(btnId, onOpen) {
+    var btn = document.getElementById(btnId || "btn-open-camera");
+    if (!btn || btn._scanOpenBound) return;
+    btn._scanOpenBound = true;
+    btn.addEventListener("click", function () {
+      setScanCameraExpanded(true);
+      if (typeof onOpen === "function") onOpen();
+    });
+  }
+
   global.AttendifyScannerHud = {
+    isLiveScanPage: isLiveScanPage,
+    beginLiveScanSession: beginLiveScanSession,
+    endLiveScanSession: endLiveScanSession,
+    setScanCameraExpanded: setScanCameraExpanded,
+    prepareManualFirstScan: prepareManualFirstScan,
+    bindOpenCameraButton: bindOpenCameraButton,
     SCAN_DEDUPE_MS: SCAN_DEDUPE_MS,
     SCAN_GATE_REPEAT_MS: SCAN_GATE_REPEAT_MS,
     createAsyncScanGate: createAsyncScanGate,

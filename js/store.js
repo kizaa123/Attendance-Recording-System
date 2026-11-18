@@ -71,15 +71,12 @@
 
   function defaultState() {
     return {
-      activeClassId: "cs101",
-      classes: [
-        { id: "cs101", code: "CS 101", name: "Introduction to Computer Science" },
-        { id: "cs210", code: "CS 210", name: "Data Structures & Algorithms" }
-      ],
-      students: seedStudents(),
+      activeClassId: "",
+      classes: [],
+      students: [],
       sessions: {},
       courses: [],
-      semester: { totalWeeks: 15, currentWeek: 8 }
+      semester: { totalWeeks: 15, currentWeek: 1 }
     };
   }
 
@@ -90,10 +87,39 @@
   }
 
   function applyState(state) {
-    if (state && state.classes && state.students && state.sessions) {
-      if (!state.courses) state.courses = [];
-      cache = state;
+    if (!state || !state.classes || !state.students || !state.sessions) return;
+    if (state.public) {
+      var live = getSession();
+      if (live && live.token) return;
     }
+    if (!state.courses) state.courses = [];
+    cache = state;
+  }
+
+  function mergeStudentIntoCache(student) {
+    if (!student || !student.id) return;
+    var state = load();
+    state.students = state.students || [];
+    var id = String(student.id);
+    var i;
+    for (i = 0; i < state.students.length; i++) {
+      if (String(state.students[i].id) === id) {
+        state.students[i] = Object.assign({}, state.students[i], student);
+        cache = state;
+        return;
+      }
+    }
+    state.students.push(student);
+    cache = state;
+  }
+
+  function lectureNameForScan(explicitName) {
+    var name = explicitName != null && String(explicitName).trim() !== "" ? String(explicitName).trim() : activeLectureName;
+    if (!name && activeCourseId) {
+      var course = courseById(activeCourseId);
+      if (course) name = courseLectureLabel(course);
+    }
+    return name;
   }
 
   function currentLecturerId() {
@@ -142,7 +168,11 @@
             page.indexOf("signup.html") !== -1 ||
             page.indexOf("enroll.html") !== -1 ||
             page.indexOf("ta-scanner.html") !== -1;
-          if (!isPublic) {
+          var hardRedirect =
+            !options.skipAuthRedirect &&
+            !options.silentAuth &&
+            !(global.AttendifyScannerHud && AttendifyScannerHud.isLiveScanPage && AttendifyScannerHud.isLiveScanPage());
+          if (!isPublic && hardRedirect) {
             clearSession();
             var next = encodeURIComponent(
               (window.location.pathname.split("/").pop() || "dashboard.html") + (window.location.search || "")
@@ -177,12 +207,12 @@
 
   /** Pull latest attendance from server (TA scans, second device) without /api/host round-trip. */
   function syncFromServer() {
-    return apiFetch("/api/state")
+    return apiFetch("/api/state", { skipAuthRedirect: true, silentAuth: true })
       .then(function (response) {
         return response.json();
       })
       .then(function (state) {
-        if (state && typeof state === "object") applyState(state);
+        if (state && typeof state === "object" && !state.public) applyState(state);
         return cache;
       })
       .catch(function () {
@@ -960,15 +990,22 @@
   var LECTURER_SCAN_QUEUE = "lecturer";
 
   function postAttendancePayload(payload) {
+    var liveScan =
+      global.AttendifyScannerHud &&
+      AttendifyScannerHud.isLiveScanPage &&
+      AttendifyScannerHud.isLiveScanPage();
     return apiFetch("/api/attendance", {
       method: "POST",
-      body: withLecturer(payload)
+      body: withLecturer(payload),
+      skipAuthRedirect: liveScan,
+      silentAuth: liveScan
     })
       .then(function (response) {
         return response.json();
       })
       .then(function (result) {
         if (result.state) applyState(result.state);
+        if (result.student) mergeStudentIntoCache(result.student);
         return result;
       });
   }
@@ -995,10 +1032,12 @@
     else if (index) payload.index = index;
 
     var student = findStudentForScan(scannerClassId, index, qrToken);
+    var scanLecture = lectureNameForScan(lectureName != null ? lectureName : payload.lectureName);
     var local = student
-      ? appendLocalAttendanceRecord(scannerClassId, payload.lectureName, week, activeCourseId, student)
+      ? appendLocalAttendanceRecord(scannerClassId, scanLecture, week, activeCourseId, student)
       : null;
     if (local && local.ok) {
+      mergeStudentIntoCache(student);
       var sync = function () {
         return postAttendancePayload(payload).catch(function () {
           if (global.AttendifyScanCache) AttendifyScanCache.enqueue(LECTURER_SCAN_QUEUE, payload);
@@ -1031,9 +1070,16 @@
     if (!session) return [];
     return session.records.map(function (record) {
       var student = state.students.filter(function (item) { return item.id === record.studentId; })[0];
-      if (!student) return null;
+      if (!student) {
+        student = {
+          id: record.studentId,
+          classId: classId,
+          name: "Student",
+          index: String(record.studentId || "")
+        };
+      }
       return { student: student, scannedAt: record.scannedAt };
-    }).filter(Boolean);
+    });
   }
 
   function publicShareOrigin(hostInfo) {
@@ -1839,8 +1885,12 @@
       })
       .then(function (pack) {
         if (!pack.body || !pack.body.ok) {
-          clearSession();
-          return { ok: false, code: "AUTH_REQUIRED", error: (pack.body && pack.body.error) || "Please sign in." };
+          if (pack.status === 401) clearSession();
+          return {
+            ok: false,
+            code: pack.status === 401 ? "AUTH_REQUIRED" : "AUTH_CHECK_FAILED",
+            error: (pack.body && pack.body.error) || "Please sign in."
+          };
         }
         var session = getSession() || {};
         session.lecturer = pack.body.lecturer || session.lecturer;
@@ -1852,7 +1902,11 @@
         return pack.body;
       })
       .catch(function () {
-        return { ok: false, error: connectionHint() };
+        var session = getSession();
+        if (session && session.token && session.lecturer) {
+          return { ok: true, offline: true, lecturer: session.lecturer, token: session.token };
+        }
+        return { ok: false, error: connectionHint(), code: "NETWORK" };
       });
   }
 
@@ -2110,6 +2164,7 @@
     updateProgrammeCourse: updateProgrammeCourse,
     deleteProgrammeCourse: deleteProgrammeCourse,
     attendanceRows: attendanceRows,
+    mergeStudentIntoCache: mergeStudentIntoCache,
     enrollUrl: enrollUrl,
     enrollShareSummary: enrollShareSummary,
     fetchEnrollContext: fetchEnrollContext,
