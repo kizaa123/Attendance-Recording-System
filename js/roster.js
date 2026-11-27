@@ -108,9 +108,11 @@ function showQr(student) {
     Attendify.qrText(student),
     document.getElementById("qr-download"),
     student.index + "-qr-card.png",
-    null,
+    Attendify.qrCompositePhotoUrl(student),
     {
       attendanceCard: true,
+      roundLogo: true,
+      avatar: 34,
       studentName: student.name,
       studentIndex: student.index
     }
