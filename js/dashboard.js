@@ -502,6 +502,8 @@ document.getElementById("start-attendance-form").addEventListener("submit", func
   event.preventDefault();
   var courseId = document.getElementById("start-attendance-course").value;
   var week = Number(document.getElementById("start-attendance-week").value) || Attendify.semesterInfo().currentWeek || 1;
+  var sessionKindInput = document.querySelector('input[name="start-session-kind"]:checked');
+  var sessionKind = sessionKindInput ? sessionKindInput.value : "lecture";
   var err = document.getElementById("start-attendance-error");
   var course = Attendify.courseById(courseId);
   if (!courseId || !course) {
@@ -509,8 +511,13 @@ document.getElementById("start-attendance-form").addEventListener("submit", func
     err.classList.remove("hidden");
     return;
   }
-  if (Attendify.isCourseWeekSessionClosed && Attendify.isCourseWeekSessionClosed(modalProgrammeId(), course, week)) {
-    err.textContent = "Attendance for Week " + week + " has already ended for this course.";
+  if (
+    Attendify.isCourseWeekSessionClosed &&
+    Attendify.isCourseWeekSessionClosed(modalProgrammeId(), course, week, sessionKind)
+  ) {
+    err.textContent =
+      "Attendance for " + Attendify.reportWeekFilterLabel(week + (sessionKind !== "lecture" ? ":" + sessionKind : "")) +
+      " has already ended for this course.";
     err.classList.remove("hidden");
     return;
   }
@@ -518,7 +525,11 @@ document.getElementById("start-attendance-form").addEventListener("submit", func
   var modal = document.getElementById("startAttendanceModal");
   var programmeId = modal.dataset.programmeId || defaultClassId();
   var teachLevel = modal.dataset.teachLevel || "";
-  Attendify.startAttendanceSession(programmeId, null, { courseId: courseId, weekNumber: week }).then(function (result) {
+  Attendify.startAttendanceSession(programmeId, null, {
+    courseId: courseId,
+    weekNumber: week,
+    sessionKind: sessionKind
+  }).then(function (result) {
     if (!result.ok) {
       err.textContent =
         result.message ||
@@ -1075,7 +1086,11 @@ function promptCreateFirstCourse(classId) {
   }, 450);
 }
 
-Attendify.ready().then(function () {
+Attendify.ready()
+  .then(function () {
+    return Attendify.validateSession({ soft: true });
+  })
+  .then(function () {
   var session = Attendify.requireLecturerSession();
   if (!session) return;
   applyLecturerChrome(session);
@@ -1116,6 +1131,7 @@ Attendify.ready().then(function () {
       });
     }
   });
+
   if (params.get("resumeScan") === "1" && Attendify.getLiveScanSession) {
     var live = Attendify.getLiveScanSession();
     if (live && Attendify.isLiveScanSessionStillOpen(live)) {
@@ -1129,7 +1145,8 @@ Attendify.ready().then(function () {
   } else if (params.get("scan") === "1") {
     openScannerModal(params.get("class") || defaultClassId());
   }
-});
+  })
+  .catch(function () {});
 
 window.addEventListener("attendify:programmes-updated", function () {
   Attendify.ready().then(renderDashboard);

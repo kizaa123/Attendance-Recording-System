@@ -855,16 +855,22 @@
   document.getElementById("take-attendance-form").addEventListener("submit", function (event) {
     event.preventDefault();
     var week = Number(document.getElementById("take-attendance-week").value) || selectedWeek;
+    var sessionKindInput = document.querySelector('input[name="take-session-kind"]:checked');
+    var sessionKind = sessionKindInput ? sessionKindInput.value : "lecture";
     var err = document.getElementById("take-attendance-error");
     err.classList.add("hidden");
-    if (isWeekClosed(week)) {
-      err.textContent = "Attendance for Week " + week + " has ended.";
+  var pair = programmeAndCourse();
+  if (pair && Attendify.isCourseWeekSessionClosed(programmeId, pair.course, week, sessionKind)) {
+      err.textContent =
+        "Attendance for " + Attendify.reportWeekFilterLabel(week + (sessionKind !== "lecture" ? ":" + sessionKind : "")) +
+        " has ended.";
       err.classList.remove("hidden");
       return;
     }
     Attendify.startAttendanceSession(programmeId, null, {
       courseId: courseId,
-      weekNumber: week
+      weekNumber: week,
+      sessionKind: sessionKind
     }).then(function (result) {
       if (!result.ok) {
         err.textContent =

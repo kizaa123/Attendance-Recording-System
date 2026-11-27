@@ -16,7 +16,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/tailwind-dashboard.js"></script>
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/enroll.css?v=5">
+  <link rel="stylesheet" href="css/enroll.css?v=6">
 </head>
 <body class="enroll-page min-h-full bg-[#f8fafc] text-slate-800 antialiased">
   <main class="max-w-lg mx-auto px-4 py-8 sm:py-10">
@@ -72,18 +72,20 @@
         </div>
       </form>
 
-      <div id="enroll-success" class="hidden mt-2 text-center">
-        <p id="success-lead" class="text-sm text-slate-600">You are registered, <strong id="success-name"></strong>.</p>
-        <p class="text-xs font-mono text-slate-500 mt-1" id="success-index"></p>
-        <div id="success-qr" class="mx-auto mt-4 flex justify-center"></div>
-        <p class="text-xs text-slate-500 mt-3">Save this card. Show it when your lecturer starts attendance scanning.</p>
-        <a id="success-download" class="inline-flex mt-4 px-4 py-2.5 rounded-xl bg-tealAccent-600 text-white text-xs font-bold">Download QR card</a>
+      <div id="enroll-success" class="hidden mt-2">
+        <p id="success-lead" class="text-sm text-slate-600 text-center">You are registered, <strong id="success-name"></strong>.</p>
+        <p class="text-xs font-mono text-slate-500 mt-1 text-center" id="success-index"></p>
+        <div class="enroll-qr-card attendify-qr-card" id="enroll-qr-card">
+          <div id="success-qr" class="attendify-qr-card__qr"></div>
+          <a id="success-download" href="#" class="attendify-qr-card__download">Download QR card</a>
+        </div>
+        <p class="text-xs text-slate-500 mt-3 text-center">Save this card. Show it when your lecturer starts attendance scanning.</p>
       </div>
     </section>
   </main>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="js/store.js?v=41"></script>
+  <script src="js/store.js?v=44"></script>
   <script src="/js/mobile-app.js?v=3"></script>
-  <script src="js/enroll.js?v=11"></script>
+  <script src="js/enroll.js?v=12"></script>
 </body>
 </html>

@@ -107,7 +107,16 @@ function showQr(student) {
     document.getElementById("qr-holder"),
     Attendify.qrText(student),
     document.getElementById("qr-download"),
-    student.index + "-qr-card.png"
+    student.index + "-qr-card.png",
+    null,
+    {
+      attendanceCard: true,
+      size: 192,
+      avatar: 44,
+      exportScale: 2,
+      studentName: student.name,
+      studentIndex: student.index
+    }
   );
 }
 

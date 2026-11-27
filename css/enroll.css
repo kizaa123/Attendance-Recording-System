@@ -118,6 +118,24 @@
   background: #f1f5f9;
 }
 
-#success-qr {
-  min-height: 224px;
+.enroll-qr-card.attendify-qr-card {
+  margin-top: 1rem;
+}
+
+#success-qr.attendify-qr-card__qr {
+  min-height: 0;
+}
+
+#success-qr .attendify-qr-wrap,
+#success-qr .attendify-qr-canvas {
+  width: 192px !important;
+  max-width: 192px !important;
+  height: auto !important;
+}
+
+.attendify-qr-card .attendify-qr-avatar {
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
 }

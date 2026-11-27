@@ -1960,6 +1960,16 @@ function resolveLectureForSession(input) {
       ? Number(input.weekNumber)
       : Number(setting("semester.currentWeek", "1")) || 1;
 
+  const rawKind = String((input && input.sessionKind) || (input && input.quizSlot) || "lecture")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (rawKind === "quiz1" || rawKind === "quiz-1") {
+    lectureName = lectureName + " · Quiz 1";
+  } else if (rawKind === "quiz2" || rawKind === "quiz-2") {
+    lectureName = lectureName + " · Quiz 2";
+  }
+
   return { ok: true, lectureName: lectureName, weekNumber: weekNumber, courseId: resolvedCourseId };
 }
 
@@ -2264,11 +2274,11 @@ function courseWeekSessionClosed(classId, lectureName, weekNumber, courseId) {
         `SELECT 1 AS hit
          FROM attendance_sessions s
          INNER JOIN attendance_session_classes l ON l.session_id = s.id
-         WHERE l.class_id = ? AND s.week_number = ? AND s.course_id = ?
+         WHERE l.class_id = ? AND s.week_number = ? AND s.course_id = ? AND s.lecture_name = ?
            AND s.closed_at IS NOT NULL AND trim(s.closed_at) != ''
          LIMIT 1`
       )
-      .get(classId, week, courseId);
+      .get(classId, week, courseId, lecture);
   } else {
     row = db
       .prepare(

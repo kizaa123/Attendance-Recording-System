@@ -402,6 +402,55 @@
     return String(course.code || "").trim() + " · " + String(course.name || "").trim();
   }
 
+  var SESSION_QUIZ_SUFFIX = { quiz1: " · Quiz 1", quiz2: " · Quiz 2" };
+
+  function normalizeSessionKind(kind) {
+    var k = String(kind || "lecture").trim().toLowerCase().replace(/\s+/g, "");
+    if (k === "quiz1" || k === "quiz-1") return "quiz1";
+    if (k === "quiz2" || k === "quiz-2") return "quiz2";
+    return "lecture";
+  }
+
+  function sessionKindFromLectureName(lectureName) {
+    var ln = String(lectureName || "").trim().toLowerCase();
+    if (/\s·\s*quiz\s*2\s*$/i.test(ln)) return "quiz2";
+    if (/\s·\s*quiz\s*1\s*$/i.test(ln)) return "quiz1";
+    return "lecture";
+  }
+
+  function courseLectureNameForKind(course, sessionKind) {
+    var base = courseLectureLabel(course);
+    var kind = normalizeSessionKind(sessionKind);
+    if (kind === "quiz1") return base + SESSION_QUIZ_SUFFIX.quiz1;
+    if (kind === "quiz2") return base + SESSION_QUIZ_SUFFIX.quiz2;
+    return base;
+  }
+
+  function parseReportWeekFilter(value) {
+    if (value === "all" || value == null || value === "") return { mode: "all" };
+    var raw = String(value).trim();
+    var match = raw.match(/^(\d{1,2})(?::(quiz1|quiz2))?$/i);
+    if (!match) {
+      var n = Number(raw);
+      if (n >= 1) return { mode: "week", weekNumber: n, sessionKind: "lecture" };
+      return { mode: "all" };
+    }
+    return {
+      mode: "week",
+      weekNumber: Number(match[1]),
+      sessionKind: match[2] ? normalizeSessionKind(match[2]) : "lecture"
+    };
+  }
+
+  function reportWeekFilterLabel(filter) {
+    var parsed = parseReportWeekFilter(filter);
+    if (parsed.mode === "all") return "All Weeks (aggregate)";
+    var label = "Week " + parsed.weekNumber;
+    if (parsed.sessionKind === "quiz1") return label + " · Quiz 1";
+    if (parsed.sessionKind === "quiz2") return label + " · Quiz 2";
+    return label;
+  }
+
   function coursesForProgramme(classId) {
     return (load().courses || [])
       .filter(function (item) {
@@ -430,23 +479,28 @@
     return classId + ":" + today() + ":" + week + ":" + ln.toLowerCase();
   }
 
-  function sessionsForCourseWeek(classId, course, weekNumber) {
+  function sessionsForCourseWeek(classId, course, weekNumber, sessionKind) {
     if (!course) return [];
-    var label = courseLectureLabel(course).toLowerCase();
+    var baseLabel = courseLectureLabel(course).toLowerCase();
     var week = Number(weekNumber) || 1;
+    var kind = sessionKind != null ? normalizeSessionKind(sessionKind) : null;
+    var targetLabel = kind ? courseLectureNameForKind(course, kind).toLowerCase() : "";
     var state = load();
     var matches = [];
     Object.keys(state.sessions || {}).forEach(function (key) {
       if (key.indexOf(classId + ":") !== 0) return;
       var session = state.sessions[key];
       if (!session || Number(session.weekNumber) !== week) return;
-      if (session.courseId && session.courseId === course.id) {
-        matches.push(session);
-        return;
+      var lecture = String(session.lectureName || "").trim().toLowerCase();
+      var courseHit = session.courseId && session.courseId === course.id;
+      var labelHit =
+        lecture === baseLabel ||
+        lecture.indexOf(baseLabel) === 0;
+      if (!courseHit && !labelHit) return;
+      if (kind) {
+        if (lecture !== targetLabel) return;
       }
-      if (String(session.lectureName || "").trim().toLowerCase() === label) {
-        matches.push(session);
-      }
+      matches.push(session);
     });
     matches.sort(function (a, b) {
       var byDate = String(b.date || "").localeCompare(String(a.date || ""));
@@ -456,8 +510,17 @@
     return matches;
   }
 
-  function findSessionForCourseWeek(classId, course, weekNumber) {
+  function findSessionForCourseWeek(classId, course, weekNumber, sessionKind) {
+    var kind = normalizeSessionKind(sessionKind || "lecture");
+    var exact = sessionsForCourseWeek(classId, course, weekNumber, kind);
+    if (exact.length) return exact[0];
+    if (kind !== "lecture") return null;
     var matches = sessionsForCourseWeek(classId, course, weekNumber);
+    var base = courseLectureLabel(course).toLowerCase();
+    var i;
+    for (i = 0; i < matches.length; i++) {
+      if (String(matches[i].lectureName || "").trim().toLowerCase() === base) return matches[i];
+    }
     return matches.length ? matches[0] : null;
   }
 
@@ -488,9 +551,18 @@
 
   var avatarPhotoCache = Object.create(null);
 
+  function isInlineAvatarSrc(src) {
+    return /^data:image\//i.test(String(src || "").trim());
+  }
+
   function ensureAvatarLoad(src, callback) {
     if (!src) {
       callback("error");
+      return;
+    }
+    if (isInlineAvatarSrc(src)) {
+      avatarPhotoCache[src] = { status: "loaded", waiters: [] };
+      callback("loaded");
       return;
     }
     var entry = avatarPhotoCache[src];
@@ -549,6 +621,10 @@
       (function (wrap) {
         var src = wrap.getAttribute("data-avatar-src");
         if (!src) return;
+        if (isInlineAvatarSrc(src)) {
+          applyAvatarSlot(wrap, "loaded");
+          return;
+        }
         var cached = avatarPhotoCache[src];
         if (cached && cached.status === "loaded") {
           applyAvatarSlot(wrap, "loaded");
@@ -975,6 +1051,7 @@
     if (options.courseId) payload.courseId = options.courseId;
     else payload.lectureName = lectureName;
     if (options.weekNumber != null) payload.weekNumber = options.weekNumber;
+    if (options.sessionKind) payload.sessionKind = normalizeSessionKind(options.sessionKind);
     return apiFetch("/api/sessions/start", {
       method: "POST",
       body: payload
@@ -1012,8 +1089,8 @@
       });
   }
 
-  function isCourseWeekSessionClosed(classId, course, weekNumber) {
-    var sessions = sessionsForCourseWeek(classId, course, weekNumber);
+  function isCourseWeekSessionClosed(classId, course, weekNumber, sessionKind) {
+    var sessions = sessionsForCourseWeek(classId, course, weekNumber, sessionKind || "lecture");
     var i;
     for (i = 0; i < sessions.length; i++) {
       if (sessions[i].closedAt) return true;
@@ -1498,11 +1575,99 @@
     drawQr(element, text, downloadLink, filename || "attendify-scanner-link.png", ATTENDIFY_BRAND_LOGO, opts);
   }
 
+  function buildAttendanceCardPng(qrCanvas, opts) {
+    if (!qrCanvas) return null;
+    opts = opts || {};
+    var scale = opts.exportScale != null ? opts.exportScale : 2;
+    var qrSize = qrCanvas.width;
+    var pad = Math.round(12 * scale);
+    var gap = Math.round(5 * scale);
+    var name = String(opts.studentName || "").trim();
+    var index = String(opts.studentIndex || "").trim();
+    var nameH = name ? Math.round(14 * scale) : 0;
+    var indexH = index ? Math.round(12 * scale) : 0;
+    var headerH = (name ? nameH + gap : 0) + (index ? indexH + gap : 0);
+    var qrPx = Math.round(qrSize * scale);
+    var w = qrPx + pad * 2;
+    var footer = Math.round(10 * scale);
+    var h = pad + headerH + qrPx + pad + footer;
+    var card = document.createElement("canvas");
+    card.width = w;
+    card.height = h;
+    var ctx = card.getContext("2d");
+    if (!ctx) return qrCanvas;
+    roundRectPath(ctx, 0, 0, w, h, Math.round(14 * scale));
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = Math.max(1, scale);
+    roundRectPath(ctx, 0.5, 0.5, w - 1, h - 1, Math.round(14 * scale));
+    ctx.stroke();
+    ctx.fillStyle = "#f8fafc";
+    roundRectPath(ctx, 1, 1, w - 2, Math.round(36 * scale), Math.round(12 * scale));
+    ctx.fill();
+    var y = pad;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    if (name) {
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "800 " + Math.round(12 * scale) + "px system-ui,sans-serif";
+      ctx.fillText(name.length > 28 ? name.slice(0, 26) + "…" : name, w / 2, y + Math.round(11 * scale));
+      y += nameH + gap;
+    }
+    if (index) {
+      ctx.fillStyle = "#64748b";
+      ctx.font = "600 " + Math.round(10 * scale) + "px ui-monospace,monospace";
+      ctx.fillText(index, w / 2, y + Math.round(9 * scale));
+      y += indexH + gap;
+    }
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(qrCanvas, pad, y, qrPx, qrPx);
+    ctx.fillStyle = "#0d9488";
+    ctx.font = "800 " + Math.round(8 * scale) + "px system-ui,sans-serif";
+    ctx.fillText("Attendify", w / 2, h - Math.round(6 * scale));
+    return card;
+  }
+
+  function mountAttendanceCardShell(element, holder, opts, downloadLink) {
+    var card = document.createElement("div");
+    card.className = "attendify-qr-card";
+    if (!opts.hideCardMeta && (opts.studentName || opts.studentIndex)) {
+      var meta = document.createElement("div");
+      meta.className = "attendify-qr-card__meta";
+      if (opts.studentName) {
+        var nameEl = document.createElement("p");
+        nameEl.className = "attendify-qr-card__name";
+        nameEl.textContent = opts.studentName;
+        meta.appendChild(nameEl);
+      }
+      if (opts.studentIndex) {
+        var idxEl = document.createElement("p");
+        idxEl.className = "attendify-qr-card__index";
+        idxEl.textContent = opts.studentIndex;
+        meta.appendChild(idxEl);
+      }
+      card.appendChild(meta);
+    }
+    var qrSlot = document.createElement("div");
+    qrSlot.className = "attendify-qr-card__qr";
+    qrSlot.appendChild(holder);
+    card.appendChild(qrSlot);
+    if (downloadLink) {
+      downloadLink.classList.add("attendify-qr-card__download");
+      if (!downloadLink.getAttribute("href")) downloadLink.setAttribute("href", "#");
+      card.appendChild(downloadLink);
+    }
+    element.innerHTML = "";
+    element.appendChild(card);
+  }
+
   function drawQr(element, text, downloadLink, filename, photoUrl, opts) {
     if (!element) return;
     opts = opts || {};
-    var size = opts.size || 224;
-    var avatar = opts.avatar != null ? opts.avatar : 50;
+    var attendanceCard = !!opts.attendanceCard;
+    var size = opts.size || (attendanceCard ? 192 : 224);
+    var avatar = opts.avatar != null ? opts.avatar : attendanceCard ? 44 : 50;
     var roundLogo = !!opts.roundLogo;
     var rawPhoto = String(photoUrl || "").trim();
     if (rawPhoto.indexOf("cdn.ucc.edu.gh") !== -1) {
@@ -1512,20 +1677,30 @@
     }
     photoUrl = rawPhoto;
 
+    var cardParent = element.closest && element.closest(".attendify-qr-card");
+    var useCardShell = attendanceCard && !cardParent;
+
     element.innerHTML = "";
     element.classList.add("attendify-qr-host");
+
+    var correctLevel =
+      photoUrl || attendanceCard
+        ? QRCode.CorrectLevel.H
+        : QRCode.CorrectLevel.M;
 
     new QRCode(element, {
       text: text,
       width: size,
       height: size,
-      correctLevel: photoUrl ? QRCode.CorrectLevel.H : QRCode.CorrectLevel.M
+      correctLevel: correctLevel
     });
 
     function setDownloadFromCanvas(canvas) {
       if (!downloadLink || !canvas) return;
       try {
-        downloadLink.href = canvas.toDataURL("image/png");
+        var exportCanvas = attendanceCard ? buildAttendanceCardPng(canvas, opts) : canvas;
+        if (!exportCanvas) exportCanvas = canvas;
+        downloadLink.href = exportCanvas.toDataURL("image/png");
         downloadLink.download = filename;
       } catch (e) {
         /* canvas may be tainted if CDN blocks CORS */
@@ -1596,8 +1771,16 @@
         holder.style.height = size + "px";
         holder.appendChild(composite);
         if (!painted) addCenterOverlay(holder);
-        element.innerHTML = "";
-        element.appendChild(holder);
+        if (useCardShell) {
+          mountAttendanceCardShell(element, holder, opts, downloadLink);
+        } else if (cardParent && downloadLink) {
+          element.innerHTML = "";
+          element.appendChild(holder);
+          if (!cardParent.contains(downloadLink)) cardParent.appendChild(downloadLink);
+        } else {
+          element.innerHTML = "";
+          element.appendChild(holder);
+        }
         setDownloadFromCanvas(painted ? composite : sourceCanvas);
       });
     }
@@ -1605,7 +1788,26 @@
     function finishQrRender(canvas, img) {
       if (canvas) {
         if (photoUrl) renderComposite(canvas);
-        else setDownloadFromCanvas(canvas);
+        else {
+          if (attendanceCard && useCardShell) {
+            var holderPlain = document.createElement("div");
+            holderPlain.className = "attendify-qr-wrap";
+            holderPlain.style.width = size + "px";
+            holderPlain.style.height = size + "px";
+            canvas.className = "attendify-qr-canvas";
+            holderPlain.appendChild(canvas);
+            mountAttendanceCardShell(element, holderPlain, opts, downloadLink);
+          } else if (cardParent) {
+            element.innerHTML = "";
+            var wrap = document.createElement("div");
+            wrap.className = "attendify-qr-wrap";
+            wrap.style.width = size + "px";
+            wrap.style.height = size + "px";
+            wrap.appendChild(canvas);
+            element.appendChild(wrap);
+          }
+          setDownloadFromCanvas(canvas);
+        }
         return;
       }
       if (img && photoUrl) {
@@ -2035,6 +2237,9 @@
         if (pack.body.token) session.token = pack.body.token;
         session.loggedInAt = session.loggedInAt || new Date().toISOString();
         saveSession(session);
+        if (pack.body.lecturer && pack.body.lecturer.photo) {
+          delete avatarPhotoCache[String(pack.body.lecturer.photo)];
+        }
         return pack.body;
       })
       .catch(function () {
@@ -2252,10 +2457,16 @@
       .then(function (result) {
         if (result.ok && result.lecturer) {
           var session = getSession() || {};
+          var prevPhoto = session.lecturer && session.lecturer.photo ? String(session.lecturer.photo) : "";
           session.lecturer = result.lecturer;
           if (result.programmeIds) session.programmeIds = result.programmeIds;
           if (result.state) applyState(result.state);
           saveSession(session);
+          if (prevPhoto && prevPhoto !== String(result.lecturer.photo || "")) {
+            delete avatarPhotoCache[prevPhoto];
+          }
+          if (result.lecturer.photo) delete avatarPhotoCache[String(result.lecturer.photo)];
+          paintLecturerChrome(result.lecturer, { sidebar: true, header: true });
         }
         return result;
       })
@@ -2296,6 +2507,11 @@
     setActiveCourseId: setActiveCourseId,
     getActiveCourseId: getActiveCourseId,
     courseLectureLabel: courseLectureLabel,
+    normalizeSessionKind: normalizeSessionKind,
+    sessionKindFromLectureName: sessionKindFromLectureName,
+    courseLectureNameForKind: courseLectureNameForKind,
+    parseReportWeekFilter: parseReportWeekFilter,
+    reportWeekFilterLabel: reportWeekFilterLabel,
     coursesForProgramme: coursesForProgramme,
     courseById: courseById,
     findSessionForCourseWeek: findSessionForCourseWeek,
