@@ -233,9 +233,7 @@ function showQr(student, options) {
     Attendify.qrCompositePhotoUrl(student),
     {
       attendanceCard: true,
-      size: 192,
-      avatar: 44,
-      exportScale: 2,
+      exportScale: 3,
       studentName: student.name,
       studentIndex: student.index
     }

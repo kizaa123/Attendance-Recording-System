@@ -483,6 +483,43 @@
       return detector.detect(boostCanvas);
     }
 
+    /** Compact QR on another device, held far from the lecturer camera */
+    function detectFarQr(video) {
+      var vw = video.videoWidth;
+      var vh = video.videoHeight;
+      if (vw < 32 || vh < 32) return global.Promise.resolve([]);
+      var scale = Math.min(7, Math.max(4.2, 2600 / Math.max(vw, 240)));
+      ensureBoostCanvas();
+      boostCanvas.width = Math.floor(vw * scale);
+      boostCanvas.height = Math.floor(vh * scale);
+      if (!boostCtx) return global.Promise.resolve([]);
+      drawToCanvas(boostCtx, video, 0, 0, vw, vh, boostCanvas.width, boostCanvas.height, {
+        smooth: false,
+        filter: "contrast(1.48) brightness(1.1) saturate(1.08)"
+      });
+      return detector.detect(boostCanvas);
+    }
+
+    function detectTinyCenter(video) {
+      var vw = video.videoWidth;
+      var vh = video.videoHeight;
+      var inset = 0.06;
+      var sx = Math.floor(vw * inset);
+      var sy = Math.floor(vh * inset);
+      var sw = Math.floor(vw * (1 - inset * 2));
+      var sh = Math.floor(vh * (1 - inset * 2));
+      var scale = Math.min(7.5, Math.max(4.5, 2480 / Math.max(sw, 160)));
+      ensureBoostCanvas();
+      boostCanvas.width = Math.floor(sw * scale);
+      boostCanvas.height = Math.floor(sh * scale);
+      if (!boostCtx) return global.Promise.resolve([]);
+      drawToCanvas(boostCtx, video, sx, sy, sw, sh, boostCanvas.width, boostCanvas.height, {
+        smooth: false,
+        filter: "contrast(1.55) brightness(1.06)"
+      });
+      return detector.detect(boostCanvas);
+    }
+
     function safeDetect(promise) {
       return promise.catch(function () {
         return [];
@@ -503,12 +540,16 @@
         if (codes.length) return codes;
         return global.Promise.all([
           safeDetect(detectScreenQr(video)),
+          safeDetect(detectFarQr(video)),
           safeDetect(detectScaled(video)),
           safeDetect(detectHighContrast(video))
         ]).then(function (batch) {
           var merged = mergeCodes(batch);
           if (merged.length) return merged;
-          return safeDetect(detectCenterZoom(video));
+          return safeDetect(detectTinyCenter(video)).then(function (tiny) {
+            if (tiny.length) return tiny;
+            return safeDetect(detectCenterZoom(video));
+          });
         });
       });
     }
