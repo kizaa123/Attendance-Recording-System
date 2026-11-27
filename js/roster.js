@@ -112,7 +112,6 @@ function showQr(student) {
     {
       attendanceCard: true,
       roundLogo: true,
-      avatar: 34,
       studentName: student.name,
       studentIndex: student.index
     }
