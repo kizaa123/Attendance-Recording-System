@@ -1115,7 +1115,7 @@ Attendify.ready()
       dashSyncTick += 1;
     }
     var scanning = scannerModal && !scannerModal.classList.contains("hidden");
-    var cadence = Attendify.isNetworkDegraded && Attendify.isNetworkDegraded() ? 6 : scanning ? 2 : 5;
+    var cadence = Attendify.isNetworkDegraded && Attendify.isNetworkDegraded() ? 6 : scanning ? 1 : 5;
     if (dashSyncTick % cadence !== 0) return;
     Attendify.syncFromServer().then(function () {
       if (scanning) renderLive();
