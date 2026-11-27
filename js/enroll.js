@@ -271,7 +271,6 @@ function showEnrollQrSuccess(student, alreadyRegistered) {
     null,
     {
       attendanceCard: true,
-      exportScale: 3,
       hideCardMeta: false,
       studentName: student.name,
       studentIndex: student.index

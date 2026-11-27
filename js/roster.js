@@ -111,7 +111,6 @@ function showQr(student) {
     null,
     {
       attendanceCard: true,
-      exportScale: 3,
       studentName: student.name,
       studentIndex: student.index
     }

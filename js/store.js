@@ -1575,10 +1575,12 @@
     drawQr(element, text, downloadLink, filename || "attendify-scanner-link.png", ATTENDIFY_BRAND_LOGO, opts);
   }
 
-  var ATTENDANCE_CARD_QR_RENDER = 160;
+  var ATTENDANCE_CARD_QR_RENDER = 124;
   var ATTENDANCE_CARD_QR_PX = 120;
   var ATTENDANCE_CARD_QR_PX_MOBILE = 100;
-  var ATTENDANCE_CARD_EXPORT_SCALE = 2.5;
+  /** Downloaded PNG uses this QR size at 1× — no upscale (smaller file, pocket card). */
+  var ATTENDANCE_CARD_EXPORT_QR_PX = 108;
+  var ATTENDANCE_CARD_EXPORT_SCALE = 1;
 
   function attendanceCardDisplayPx(opts) {
     opts = opts || {};
@@ -1604,54 +1606,59 @@
   function buildAttendanceCardPng(qrCanvas, opts) {
     if (!qrCanvas) return null;
     opts = opts || {};
-    var scale = opts.exportScale != null ? opts.exportScale : ATTENDANCE_CARD_EXPORT_SCALE;
-    var qrSize = qrCanvas.width;
-    var pad = Math.round(8 * scale);
-    var gap = Math.round(4 * scale);
+    var qrPx =
+      opts.exportQrPx != null
+        ? Math.round(Number(opts.exportQrPx))
+        : opts.exportScale != null && Number(opts.exportScale) > 1
+          ? Math.round(qrCanvas.width * Number(opts.exportScale))
+          : ATTENDANCE_CARD_EXPORT_QR_PX;
+    var pad = 5;
+    var gap = 3;
     var name = String(opts.studentName || "").trim();
     var index = String(opts.studentIndex || "").trim();
-    var nameH = name ? Math.round(14 * scale) : 0;
-    var indexH = index ? Math.round(12 * scale) : 0;
+    var nameH = name ? 12 : 0;
+    var indexH = index ? 10 : 0;
     var headerH = (name ? nameH + gap : 0) + (index ? indexH + gap : 0);
-    var qrPx = Math.round(qrSize * scale);
     var w = qrPx + pad * 2;
-    var footer = Math.round(8 * scale);
+    var footer = 6;
     var h = pad + headerH + qrPx + pad + footer;
     var card = document.createElement("canvas");
     card.width = w;
     card.height = h;
     var ctx = card.getContext("2d");
     if (!ctx) return qrCanvas;
-    roundRectPath(ctx, 0, 0, w, h, Math.round(14 * scale));
+    roundRectPath(ctx, 0, 0, w, h, 8);
     ctx.fillStyle = "#ffffff";
     ctx.fill();
     ctx.strokeStyle = "#e2e8f0";
-    ctx.lineWidth = Math.max(1, scale);
-    roundRectPath(ctx, 0.5, 0.5, w - 1, h - 1, Math.round(14 * scale));
+    ctx.lineWidth = 1;
+    roundRectPath(ctx, 0.5, 0.5, w - 1, h - 1, 8);
     ctx.stroke();
     ctx.fillStyle = "#f8fafc";
-    roundRectPath(ctx, 1, 1, w - 2, Math.round(28 * scale), Math.round(10 * scale));
-    ctx.fill();
+    if (headerH > 0) {
+      roundRectPath(ctx, 1, 1, w - 2, Math.max(20, headerH + pad), 7);
+      ctx.fill();
+    }
     var y = pad;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     if (name) {
       ctx.fillStyle = "#0f172a";
-      ctx.font = "800 " + Math.round(11 * scale) + "px system-ui,sans-serif";
-      ctx.fillText(name.length > 28 ? name.slice(0, 26) + "…" : name, w / 2, y + Math.round(11 * scale));
+      ctx.font = "800 9px system-ui,sans-serif";
+      ctx.fillText(name.length > 26 ? name.slice(0, 24) + "…" : name, w / 2, y + 9);
       y += nameH + gap;
     }
     if (index) {
       ctx.fillStyle = "#64748b";
-      ctx.font = "600 " + Math.round(10 * scale) + "px ui-monospace,monospace";
-      ctx.fillText(index, w / 2, y + Math.round(9 * scale));
+      ctx.font = "600 8px ui-monospace,monospace";
+      ctx.fillText(index, w / 2, y + 8);
       y += indexH + gap;
     }
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(qrCanvas, pad, y, qrPx, qrPx);
+    ctx.drawImage(qrCanvas, 0, 0, qrCanvas.width, qrCanvas.height, pad, y, qrPx, qrPx);
     ctx.fillStyle = "#0d9488";
-    ctx.font = "800 " + Math.round(8 * scale) + "px system-ui,sans-serif";
-    ctx.fillText("Attendify", w / 2, h - Math.round(6 * scale));
+    ctx.font = "800 6px system-ui,sans-serif";
+    ctx.fillText("Attendify", w / 2, h - 3);
     return card;
   }
 
