@@ -1749,6 +1749,15 @@ body.faculty-content-ready main .flex-1 {
   }
 }
 
+.attendify-qr-card .attendify-qr-avatar,
+.attendify-qr-wrap--photo .attendify-qr-avatar {
+  width: var(--qr-avatar-px, 36px);
+  height: var(--qr-avatar-px, 36px);
+  margin-left: calc(var(--qr-avatar-px, 36px) / -2);
+  margin-top: calc(var(--qr-avatar-px, 36px) / -2);
+  border-width: 2px;
+}
+
 .attendify-qr-avatar {
   position: absolute;
   left: 50%;

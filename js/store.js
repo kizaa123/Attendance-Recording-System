@@ -1575,11 +1575,12 @@
     drawQr(element, text, downloadLink, filename || "attendify-scanner-link.png", ATTENDIFY_BRAND_LOGO, opts);
   }
 
-  var ATTENDANCE_CARD_QR_RENDER = 138;
-  var ATTENDANCE_CARD_QR_PX = 130;
-  var ATTENDANCE_CARD_QR_PX_MOBILE = 118;
-  /** Downloaded PNG QR block (compact, not tiny; matches on-screen scale). */
-  var ATTENDANCE_CARD_EXPORT_QR_PX = 132;
+  var ATTENDANCE_CARD_QR_RENDER = 148;
+  var ATTENDANCE_CARD_QR_PX = 142;
+  var ATTENDANCE_CARD_QR_PX_MOBILE = 132;
+  /** Downloaded PNG QR block (compact; same proportions as preview). */
+  var ATTENDANCE_CARD_EXPORT_QR_PX = 142;
+  var ATTENDANCE_CARD_AVATAR = 36;
   var ATTENDANCE_CARD_EXPORT_SCALE = 1;
 
   function attendanceCardDisplayPx(opts) {
@@ -1594,13 +1595,17 @@
     return ATTENDANCE_CARD_QR_PX;
   }
 
-  function applyQrWrapDisplaySize(holder, displayPx) {
+  function applyQrWrapDisplaySize(holder, displayPx, avatarPx, renderPx) {
     if (!holder) return;
     var px = Number(displayPx) || ATTENDANCE_CARD_QR_PX;
     holder.style.width = px + "px";
     holder.style.maxWidth = "100%";
     holder.style.height = "auto";
     holder.setAttribute("data-qr-display", String(px));
+    if (avatarPx != null && renderPx != null && Number(renderPx) > 0) {
+      var scaledAv = Math.max(28, Math.round((Number(avatarPx) * px) / Number(renderPx)));
+      holder.style.setProperty("--qr-avatar-px", scaledAv + "px");
+    }
   }
 
   function buildAttendanceCardPng(qrCanvas, opts) {
@@ -1705,7 +1710,7 @@
       : Number(opts.size) || 224;
     if (!attendanceCard && opts.size) size = Number(opts.size) || size;
     var avatar =
-      opts.avatar != null ? opts.avatar : attendanceCard ? 34 : 50;
+      opts.avatar != null ? opts.avatar : attendanceCard ? ATTENDANCE_CARD_AVATAR : 50;
     var roundLogo = !!opts.roundLogo;
     var rawPhotoIn = String(photoUrl || "").trim();
     var plainAttendanceQr =
@@ -1807,8 +1812,13 @@
       ctx.drawImage(sourceCanvas, 0, 0, size, size);
       paintAvatarOn(ctx, size / 2, size / 2).then(function (painted) {
         var holder = document.createElement("div");
-        holder.className = "attendify-qr-wrap";
-        applyQrWrapDisplaySize(holder, attendanceCard ? displaySize : size);
+        holder.className = "attendify-qr-wrap attendify-qr-wrap--photo";
+        applyQrWrapDisplaySize(
+          holder,
+          attendanceCard ? displaySize : size,
+          avatar,
+          size
+        );
         holder.appendChild(composite);
         if (!painted) addCenterOverlay(holder);
         if (useCardShell) {
@@ -1821,7 +1831,20 @@
           element.innerHTML = "";
           element.appendChild(holder);
         }
-        setDownloadFromCanvas(painted ? composite : sourceCanvas);
+        if (painted) {
+          setDownloadFromCanvas(composite);
+        } else if (attendanceCard && photoUrl) {
+          var exportCopy = document.createElement("canvas");
+          exportCopy.width = size;
+          exportCopy.height = size;
+          var exCtx = exportCopy.getContext("2d");
+          exCtx.drawImage(sourceCanvas, 0, 0, size, size);
+          paintAvatarOn(exCtx, size / 2, size / 2).then(function (drew) {
+            setDownloadFromCanvas(drew ? exportCopy : sourceCanvas);
+          });
+        } else {
+          setDownloadFromCanvas(painted ? composite : sourceCanvas);
+        }
       });
     }
 
@@ -1832,7 +1855,7 @@
           if (attendanceCard && useCardShell) {
             var holderPlain = document.createElement("div");
             holderPlain.className = "attendify-qr-wrap";
-            applyQrWrapDisplaySize(holderPlain, displaySize);
+            applyQrWrapDisplaySize(holderPlain, displaySize, avatar, size);
             canvas.className = "attendify-qr-canvas";
             holderPlain.appendChild(canvas);
             mountAttendanceCardShell(element, holderPlain, opts, downloadLink);
@@ -1840,7 +1863,7 @@
             element.innerHTML = "";
             var wrap = document.createElement("div");
             wrap.className = "attendify-qr-wrap";
-            applyQrWrapDisplaySize(wrap, attendanceCard ? displaySize : size);
+            applyQrWrapDisplaySize(wrap, attendanceCard ? displaySize : size, avatar, size);
             wrap.appendChild(canvas);
             element.appendChild(wrap);
           }

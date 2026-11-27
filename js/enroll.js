@@ -263,16 +263,22 @@ function showEnrollQrSuccess(student, alreadyRegistered) {
       : "You are registered. Save this card for attendance.";
   }
 
+  var profileImg = profileEls().img;
+  var photoForCard =
+    Attendify.qrCompositePhotoUrl(student) ||
+    String(uccPhotoForSubmit || "").trim() ||
+    (profileImg && !profileImg.classList.contains("hidden") && profileImg.src ? profileImg.src : "") ||
+    Attendify.uccPhotoPageUrl(student.index);
+
   Attendify.drawQr(
     document.getElementById("success-qr"),
     Attendify.qrText(student),
     document.getElementById("success-download"),
     student.index + "-attendance-card.png",
-    Attendify.qrCompositePhotoUrl(student),
+    photoForCard,
     {
       attendanceCard: true,
       roundLogo: true,
-      avatar: 34,
       hideCardMeta: false,
       studentName: student.name,
       studentIndex: student.index
