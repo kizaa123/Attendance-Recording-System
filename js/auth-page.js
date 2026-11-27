@@ -267,8 +267,8 @@
 
   var existing = Attendify.getSession && Attendify.getSession();
   if (existing && existing.token && Attendify.validateSession && params.get("mode") !== "signup") {
-    Attendify.validateSession().then(function (me) {
-      if (!me || !me.ok) return;
+    Attendify.validateSession({ soft: true }).then(function (me) {
+      if (!me || !me.ok || me.offline || me.stale) return;
       var nextRaw = params.get("next") || "dashboard.html";
       try {
         nextRaw = decodeURIComponent(nextRaw);

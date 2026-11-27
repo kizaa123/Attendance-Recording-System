@@ -399,10 +399,12 @@
       }
     }
 
-    function drawVideoSharp(ctx, video, sx, sy, sw, sh, dw, dh) {
-      ctx.imageSmoothingEnabled = false;
+    function drawToCanvas(ctx, video, sx, sy, sw, sh, dw, dh, opts) {
+      opts = opts || {};
+      ctx.imageSmoothingEnabled = opts.smooth !== false;
+      if (opts.smooth === false) ctx.imageSmoothingEnabled = false;
       try {
-        ctx.filter = "contrast(1.22) brightness(1.04)";
+        ctx.filter = opts.filter != null ? opts.filter : "contrast(1.22) brightness(1.04)";
       } catch (e) {}
       ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
       try {
@@ -413,42 +415,102 @@
     function detectScaled(video) {
       var vw = video.videoWidth;
       var vh = video.videoHeight;
-      var scale = Math.min(4, Math.max(2.1, 1680 / Math.max(vw, 320)));
+      var scale = Math.min(4.25, Math.max(2.2, 1720 / Math.max(vw, 320)));
       ensureBoostCanvas();
       boostCanvas.width = Math.floor(vw * scale);
       boostCanvas.height = Math.floor(vh * scale);
       if (!boostCtx) return detector.detect(video);
-      drawVideoSharp(boostCtx, video, 0, 0, vw, vh, boostCanvas.width, boostCanvas.height);
+      drawToCanvas(boostCtx, video, 0, 0, vw, vh, boostCanvas.width, boostCanvas.height, {
+        smooth: false,
+        filter: "contrast(1.24) brightness(1.04)"
+      });
+      return detector.detect(boostCanvas);
+    }
+
+    /** Student QR on another phone screen — moire + small center box */
+    function detectScreenQr(video) {
+      var vw = video.videoWidth;
+      var vh = video.videoHeight;
+      var inset = 0.2;
+      var sx = Math.floor(vw * inset);
+      var sy = Math.floor(vh * inset);
+      var sw = Math.floor(vw * (1 - inset * 2));
+      var sh = Math.floor(vh * (1 - inset * 2));
+      var scale = Math.min(5, Math.max(3, 1920 / Math.max(sw, 180)));
+      ensureBoostCanvas();
+      boostCanvas.width = Math.floor(sw * scale);
+      boostCanvas.height = Math.floor(sh * scale);
+      if (!boostCtx) return global.Promise.resolve([]);
+      drawToCanvas(boostCtx, video, sx, sy, sw, sh, boostCanvas.width, boostCanvas.height, {
+        smooth: true,
+        filter: "contrast(1.38) brightness(1.08) saturate(1.05)"
+      });
+      return detector.detect(boostCanvas);
+    }
+
+    function detectHighContrast(video) {
+      var vw = video.videoWidth;
+      var vh = video.videoHeight;
+      var scale = Math.min(4.5, Math.max(2.4, 1560 / Math.max(vw, 320)));
+      ensureBoostCanvas();
+      boostCanvas.width = Math.floor(vw * scale);
+      boostCanvas.height = Math.floor(vh * scale);
+      if (!boostCtx) return global.Promise.resolve([]);
+      drawToCanvas(boostCtx, video, 0, 0, vw, vh, boostCanvas.width, boostCanvas.height, {
+        smooth: false,
+        filter: "contrast(1.52) brightness(0.98)"
+      });
       return detector.detect(boostCanvas);
     }
 
     function detectCenterZoom(video) {
       var vw = video.videoWidth;
       var vh = video.videoHeight;
-      var inset = 0.14;
+      var inset = 0.12;
       var sx = Math.floor(vw * inset);
       var sy = Math.floor(vh * inset);
       var sw = Math.floor(vw * (1 - inset * 2));
       var sh = Math.floor(vh * (1 - inset * 2));
-      var scale = Math.min(4.25, Math.max(2.6, 1520 / Math.max(sw, 240)));
+      var scale = Math.min(4.5, Math.max(2.8, 1580 / Math.max(sw, 220)));
       ensureBoostCanvas();
       boostCanvas.width = Math.floor(sw * scale);
       boostCanvas.height = Math.floor(sh * scale);
       if (!boostCtx) return global.Promise.resolve([]);
-      drawVideoSharp(boostCtx, video, sx, sy, sw, sh, boostCanvas.width, boostCanvas.height);
+      drawToCanvas(boostCtx, video, sx, sy, sw, sh, boostCanvas.width, boostCanvas.height, {
+        smooth: false,
+        filter: "contrast(1.28) brightness(1.02)"
+      });
       return detector.detect(boostCanvas);
     }
 
+    function safeDetect(promise) {
+      return promise.catch(function () {
+        return [];
+      });
+    }
+
+    function mergeCodes(results) {
+      var all = [];
+      var i;
+      for (i = 0; i < results.length; i++) {
+        if (results[i] && results[i].length) all = all.concat(results[i]);
+      }
+      return all;
+    }
+
     function detectPassChain(video) {
-      return detectScaled(video)
-        .then(function (codes) {
-          if (codes && codes.length) return codes;
-          return detectCenterZoom(video);
-        })
-        .then(function (codes) {
-          if (codes && codes.length) return codes;
-          return detector.detect(video);
+      return safeDetect(detector.detect(video)).then(function (codes) {
+        if (codes.length) return codes;
+        return global.Promise.all([
+          safeDetect(detectScreenQr(video)),
+          safeDetect(detectScaled(video)),
+          safeDetect(detectHighContrast(video))
+        ]).then(function (batch) {
+          var merged = mergeCodes(batch);
+          if (merged.length) return merged;
+          return safeDetect(detectCenterZoom(video));
         });
+      });
     }
 
     function loop() {
@@ -532,21 +594,16 @@
 
   function updateCameraFacingBadge(el, facing) {
     if (!el) return;
-    el.textContent = facing === "user" ? "Front" : "Back";
     el.setAttribute("data-facing", facing === "user" ? "user" : "environment");
     el.setAttribute("title", cameraFacingLabel(facing));
+    el.textContent = "";
+    el.setAttribute("aria-hidden", "true");
+    el.classList.add("hidden");
   }
 
   function setFacingButtonStates(frontBtn, backBtn, facing) {
-    var isFront = facing === "user";
-    if (frontBtn) {
-      frontBtn.classList.toggle("is-active", isFront);
-      frontBtn.setAttribute("aria-pressed", isFront ? "true" : "false");
-    }
-    if (backBtn) {
-      backBtn.classList.toggle("is-active", !isFront);
-      backBtn.setAttribute("aria-pressed", !isFront ? "true" : "false");
-    }
+    if (frontBtn) frontBtn.setAttribute("aria-hidden", "true");
+    if (backBtn) backBtn.setAttribute("aria-hidden", "true");
   }
 
   function whenHtml5QrcodeReady(callback, timeoutMs) {
@@ -761,7 +818,48 @@
     });
   }
 
+  var liveScanOpenCount = 0;
+
+  function isLiveScanPage() {
+    return liveScanOpenCount > 0;
+  }
+
+  function setScanCameraExpanded(expanded) {
+    var shell = document.getElementById("scan-camera-shell");
+    var openBtn = document.getElementById("btn-open-camera");
+    if (shell) shell.classList.toggle("hidden", !expanded);
+    if (openBtn) openBtn.classList.toggle("hidden", expanded);
+  }
+
+  function beginLiveScanSession() {
+    liveScanOpenCount += 1;
+  }
+
+  function endLiveScanSession() {
+    liveScanOpenCount = Math.max(0, liveScanOpenCount - 1);
+  }
+
+  function prepareManualFirstScan() {
+    setScanCameraExpanded(false);
+  }
+
+  function bindOpenCameraButton(btnId, onOpen) {
+    var btn = document.getElementById(btnId || "btn-open-camera");
+    if (!btn || btn._scanOpenBound) return;
+    btn._scanOpenBound = true;
+    btn.addEventListener("click", function () {
+      setScanCameraExpanded(true);
+      if (typeof onOpen === "function") onOpen();
+    });
+  }
+
   global.AttendifyScannerHud = {
+    isLiveScanPage: isLiveScanPage,
+    beginLiveScanSession: beginLiveScanSession,
+    endLiveScanSession: endLiveScanSession,
+    setScanCameraExpanded: setScanCameraExpanded,
+    prepareManualFirstScan: prepareManualFirstScan,
+    bindOpenCameraButton: bindOpenCameraButton,
     SCAN_DEDUPE_MS: SCAN_DEDUPE_MS,
     SCAN_GATE_REPEAT_MS: SCAN_GATE_REPEAT_MS,
     createAsyncScanGate: createAsyncScanGate,

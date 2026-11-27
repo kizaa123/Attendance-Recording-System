@@ -609,6 +609,8 @@
     })
     .then(function (result) {
       if (!result || !result.ok) return;
+      var session = Attendify.getSession() || {};
+      if (result.lecturer) session.lecturer = result.lecturer;
       bootAfterAuth();
     });
 })();

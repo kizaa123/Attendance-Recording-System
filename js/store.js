@@ -58,6 +58,65 @@
     return "Connection lost. Check Wi‑Fi and try again.";
   }
 
+  var API_TIMEOUT_MS = 12000;
+  var syncInFlight = null;
+  var syncCooldownUntil = 0;
+  var networkDegraded = false;
+
+  function isNetworkDegraded() {
+    if (global.navigator && global.navigator.onLine === false) return true;
+    return networkDegraded;
+  }
+
+  function markNetworkDegraded(on) {
+    networkDegraded = !!on;
+    if (global.AttendifyConnectivity && global.AttendifyConnectivity.reflect) {
+      global.AttendifyConnectivity.reflect();
+    }
+  }
+
+  function isNetworkError(err) {
+    if (!err) return true;
+    if (err.code === "NETWORK" || err.name === "AbortError") return true;
+    return false;
+  }
+
+  function fetchWithTimeout(url, options, timeoutMs) {
+    timeoutMs = timeoutMs == null ? API_TIMEOUT_MS : timeoutMs;
+    options = options || {};
+    if (typeof AbortController === "undefined") {
+      return fetch(url, options);
+    }
+    var controller = new AbortController();
+    var timer = global.setTimeout(function () {
+      try {
+        controller.abort();
+      } catch (_) {}
+    }, timeoutMs);
+    var opts = Object.assign({}, options, { signal: controller.signal });
+    return fetch(url, opts)
+      .catch(function (err) {
+        if (err && err.name === "AbortError") {
+          var timeoutErr = new Error("timeout");
+          timeoutErr.code = "NETWORK";
+          throw timeoutErr;
+        }
+        throw err;
+      })
+      .finally(function () {
+        global.clearTimeout(timer);
+      });
+  }
+
+  function pendingScanCount() {
+    if (!global.AttendifyScanCache || !AttendifyScanCache.queueDepth) return 0;
+    try {
+      return AttendifyScanCache.queueDepth("lecturer") || 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   function seedStudents() {
     return [
       { id: "s1", classId: "cs101", name: "Elena Rostova", index: "CS2024-0012", email: "e.rostova@student.ac.edu", photo: "", source: "lecturer" },
@@ -71,15 +130,12 @@
 
   function defaultState() {
     return {
-      activeClassId: "cs101",
-      classes: [
-        { id: "cs101", code: "CS 101", name: "Introduction to Computer Science" },
-        { id: "cs210", code: "CS 210", name: "Data Structures & Algorithms" }
-      ],
-      students: seedStudents(),
+      activeClassId: "",
+      classes: [],
+      students: [],
       sessions: {},
       courses: [],
-      semester: { totalWeeks: 15, currentWeek: 8 }
+      semester: { totalWeeks: 15, currentWeek: 1 }
     };
   }
 
@@ -90,10 +146,39 @@
   }
 
   function applyState(state) {
-    if (state && state.classes && state.students && state.sessions) {
-      if (!state.courses) state.courses = [];
-      cache = state;
+    if (!state || !state.classes || !state.students || !state.sessions) return;
+    if (state.public) {
+      var live = getSession();
+      if (live && live.token) return;
     }
+    if (!state.courses) state.courses = [];
+    cache = state;
+  }
+
+  function mergeStudentIntoCache(student) {
+    if (!student || !student.id) return;
+    var state = load();
+    state.students = state.students || [];
+    var id = String(student.id);
+    var i;
+    for (i = 0; i < state.students.length; i++) {
+      if (String(state.students[i].id) === id) {
+        state.students[i] = Object.assign({}, state.students[i], student);
+        cache = state;
+        return;
+      }
+    }
+    state.students.push(student);
+    cache = state;
+  }
+
+  function lectureNameForScan(explicitName) {
+    var name = explicitName != null && String(explicitName).trim() !== "" ? String(explicitName).trim() : activeLectureName;
+    if (!name && activeCourseId) {
+      var course = courseById(activeCourseId);
+      if (course) name = courseLectureLabel(course);
+    }
+    return name;
   }
 
   function currentLecturerId() {
@@ -131,33 +216,55 @@
     if (options.body && typeof options.body === "object" && !(options.body instanceof Blob)) {
       opts.body = JSON.stringify(options.body);
     }
-    return fetch(apiUrl(path), opts).then(function (response) {
-      if (response.status === 401) {
-        return response.json().catch(function () {
-          return { ok: false, code: "AUTH_REQUIRED" };
-        }).then(function (body) {
-          var page = (window.location.pathname || "").toLowerCase();
-          var isPublic =
-            page.indexOf("login.html") !== -1 ||
-            page.indexOf("signup.html") !== -1 ||
-            page.indexOf("enroll.html") !== -1 ||
-            page.indexOf("ta-scanner.html") !== -1;
-          if (!isPublic) {
-            clearSession();
-            var next = encodeURIComponent(
-              (window.location.pathname.split("/").pop() || "dashboard.html") + (window.location.search || "")
-            );
-            window.location.replace("login.html?next=" + next);
-          }
-          return Promise.reject(body || { ok: false, code: "AUTH_REQUIRED" });
-        });
-      }
-      return response;
-    });
+    var url = apiUrl(path);
+    return fetchWithTimeout(url, opts, options.timeoutMs)
+      .then(function (response) {
+        if (response.status === 401) {
+          markNetworkDegraded(true);
+          return response.json().catch(function () {
+            return { ok: false, code: "AUTH_REQUIRED" };
+          }).then(function (body) {
+            var page = (window.location.pathname || "").toLowerCase();
+            var isPublic =
+              page.indexOf("login.html") !== -1 ||
+              page.indexOf("signup.html") !== -1 ||
+              page.indexOf("enroll.html") !== -1 ||
+              page.indexOf("ta-scanner.html") !== -1;
+            var hasLocal =
+              !!(function () {
+                try {
+                  var s = getSession();
+                  return s && s.token && s.lecturer;
+                } catch (_) {
+                  return false;
+                }
+              })();
+            var hardRedirect =
+              !hasLocal &&
+              !options.skipAuthRedirect &&
+              !options.silentAuth &&
+              !(global.AttendifyScannerHud && AttendifyScannerHud.isLiveScanPage && AttendifyScannerHud.isLiveScanPage());
+            if (!isPublic && hardRedirect) {
+              clearSession();
+              var next = encodeURIComponent(
+                (window.location.pathname.split("/").pop() || "dashboard.html") + (window.location.search || "")
+              );
+              window.location.replace("login.html?next=" + next);
+            }
+            return Promise.reject(body || { ok: false, code: "AUTH_REQUIRED" });
+          });
+        }
+        if (response.ok) markNetworkDegraded(false);
+        return response;
+      })
+      .catch(function (err) {
+        if (isNetworkError(err)) markNetworkDegraded(true);
+        return Promise.reject(err);
+      });
   }
 
   function ready() {
-    return apiFetch("/api/host")
+    return apiFetch("/api/host", { skipAuthRedirect: true, silentAuth: true, timeoutMs: 8000 })
       .then(function (response) {
         return response.json();
       })
@@ -170,23 +277,63 @@
         return cache;
       })
       .catch(function () {
+        markNetworkDegraded(true);
         if (!shareOrigin) shareOrigin = window.location.origin;
         return cache;
       });
   }
 
+  function syncBackoffMs() {
+    if (global.navigator && global.navigator.onLine === false) return 20000;
+    if (networkDegraded) return 12000;
+    return 0;
+  }
+
   /** Pull latest attendance from server (TA scans, second device) without /api/host round-trip. */
   function syncFromServer() {
-    return apiFetch("/api/state")
+    var now = Date.now();
+    var wait = syncCooldownUntil - now;
+    if (wait > 0) return Promise.resolve(cache);
+    if (syncInFlight) return syncInFlight;
+    syncInFlight = apiFetch("/api/state", {
+      skipAuthRedirect: true,
+      silentAuth: true,
+      timeoutMs: 10000
+    })
       .then(function (response) {
         return response.json();
       })
       .then(function (state) {
-        if (state && typeof state === "object") applyState(state);
+        if (state && typeof state === "object" && !state.public) applyState(state);
+        markNetworkDegraded(false);
+        syncCooldownUntil = Date.now() + 1200;
         return cache;
       })
       .catch(function () {
+        markNetworkDegraded(true);
+        syncCooldownUntil = Date.now() + syncBackoffMs() || 8000;
         return cache;
+      })
+      .then(function (result) {
+        syncInFlight = null;
+        return result;
+      });
+    return syncInFlight;
+  }
+
+  function softReconnect() {
+    markNetworkDegraded(false);
+    syncCooldownUntil = 0;
+    return syncFromServer()
+      .then(function () {
+        return flushPendingAttendanceScans();
+      })
+      .then(function () {
+        return validateSession({ soft: true });
+      })
+      .catch(function () {
+        markNetworkDegraded(true);
+        return { ok: false, code: "NETWORK" };
       });
   }
 
@@ -255,6 +402,55 @@
     return String(course.code || "").trim() + " · " + String(course.name || "").trim();
   }
 
+  var SESSION_QUIZ_SUFFIX = { quiz1: " · Quiz 1", quiz2: " · Quiz 2" };
+
+  function normalizeSessionKind(kind) {
+    var k = String(kind || "lecture").trim().toLowerCase().replace(/\s+/g, "");
+    if (k === "quiz1" || k === "quiz-1") return "quiz1";
+    if (k === "quiz2" || k === "quiz-2") return "quiz2";
+    return "lecture";
+  }
+
+  function sessionKindFromLectureName(lectureName) {
+    var ln = String(lectureName || "").trim().toLowerCase();
+    if (/\s·\s*quiz\s*2\s*$/i.test(ln)) return "quiz2";
+    if (/\s·\s*quiz\s*1\s*$/i.test(ln)) return "quiz1";
+    return "lecture";
+  }
+
+  function courseLectureNameForKind(course, sessionKind) {
+    var base = courseLectureLabel(course);
+    var kind = normalizeSessionKind(sessionKind);
+    if (kind === "quiz1") return base + SESSION_QUIZ_SUFFIX.quiz1;
+    if (kind === "quiz2") return base + SESSION_QUIZ_SUFFIX.quiz2;
+    return base;
+  }
+
+  function parseReportWeekFilter(value) {
+    if (value === "all" || value == null || value === "") return { mode: "all" };
+    var raw = String(value).trim();
+    var match = raw.match(/^(\d{1,2})(?::(quiz1|quiz2))?$/i);
+    if (!match) {
+      var n = Number(raw);
+      if (n >= 1) return { mode: "week", weekNumber: n, sessionKind: "lecture" };
+      return { mode: "all" };
+    }
+    return {
+      mode: "week",
+      weekNumber: Number(match[1]),
+      sessionKind: match[2] ? normalizeSessionKind(match[2]) : "lecture"
+    };
+  }
+
+  function reportWeekFilterLabel(filter) {
+    var parsed = parseReportWeekFilter(filter);
+    if (parsed.mode === "all") return "All Weeks (aggregate)";
+    var label = "Week " + parsed.weekNumber;
+    if (parsed.sessionKind === "quiz1") return label + " · Quiz 1";
+    if (parsed.sessionKind === "quiz2") return label + " · Quiz 2";
+    return label;
+  }
+
   function coursesForProgramme(classId) {
     return (load().courses || [])
       .filter(function (item) {
@@ -283,23 +479,28 @@
     return classId + ":" + today() + ":" + week + ":" + ln.toLowerCase();
   }
 
-  function sessionsForCourseWeek(classId, course, weekNumber) {
+  function sessionsForCourseWeek(classId, course, weekNumber, sessionKind) {
     if (!course) return [];
-    var label = courseLectureLabel(course).toLowerCase();
+    var baseLabel = courseLectureLabel(course).toLowerCase();
     var week = Number(weekNumber) || 1;
+    var kind = sessionKind != null ? normalizeSessionKind(sessionKind) : null;
+    var targetLabel = kind ? courseLectureNameForKind(course, kind).toLowerCase() : "";
     var state = load();
     var matches = [];
     Object.keys(state.sessions || {}).forEach(function (key) {
       if (key.indexOf(classId + ":") !== 0) return;
       var session = state.sessions[key];
       if (!session || Number(session.weekNumber) !== week) return;
-      if (session.courseId && session.courseId === course.id) {
-        matches.push(session);
-        return;
+      var lecture = String(session.lectureName || "").trim().toLowerCase();
+      var courseHit = session.courseId && session.courseId === course.id;
+      var labelHit =
+        lecture === baseLabel ||
+        lecture.indexOf(baseLabel) === 0;
+      if (!courseHit && !labelHit) return;
+      if (kind) {
+        if (lecture !== targetLabel) return;
       }
-      if (String(session.lectureName || "").trim().toLowerCase() === label) {
-        matches.push(session);
-      }
+      matches.push(session);
     });
     matches.sort(function (a, b) {
       var byDate = String(b.date || "").localeCompare(String(a.date || ""));
@@ -309,8 +510,17 @@
     return matches;
   }
 
-  function findSessionForCourseWeek(classId, course, weekNumber) {
+  function findSessionForCourseWeek(classId, course, weekNumber, sessionKind) {
+    var kind = normalizeSessionKind(sessionKind || "lecture");
+    var exact = sessionsForCourseWeek(classId, course, weekNumber, kind);
+    if (exact.length) return exact[0];
+    if (kind !== "lecture") return null;
     var matches = sessionsForCourseWeek(classId, course, weekNumber);
+    var base = courseLectureLabel(course).toLowerCase();
+    var i;
+    for (i = 0; i < matches.length; i++) {
+      if (String(matches[i].lectureName || "").trim().toLowerCase() === base) return matches[i];
+    }
     return matches.length ? matches[0] : null;
   }
 
@@ -341,9 +551,18 @@
 
   var avatarPhotoCache = Object.create(null);
 
+  function isInlineAvatarSrc(src) {
+    return /^data:image\//i.test(String(src || "").trim());
+  }
+
   function ensureAvatarLoad(src, callback) {
     if (!src) {
       callback("error");
+      return;
+    }
+    if (isInlineAvatarSrc(src)) {
+      avatarPhotoCache[src] = { status: "loaded", waiters: [] };
+      callback("loaded");
       return;
     }
     var entry = avatarPhotoCache[src];
@@ -402,6 +621,10 @@
       (function (wrap) {
         var src = wrap.getAttribute("data-avatar-src");
         if (!src) return;
+        if (isInlineAvatarSrc(src)) {
+          applyAvatarSlot(wrap, "loaded");
+          return;
+        }
         var cached = avatarPhotoCache[src];
         if (cached && cached.status === "loaded") {
           applyAvatarSlot(wrap, "loaded");
@@ -828,6 +1051,7 @@
     if (options.courseId) payload.courseId = options.courseId;
     else payload.lectureName = lectureName;
     if (options.weekNumber != null) payload.weekNumber = options.weekNumber;
+    if (options.sessionKind) payload.sessionKind = normalizeSessionKind(options.sessionKind);
     return apiFetch("/api/sessions/start", {
       method: "POST",
       body: payload
@@ -865,8 +1089,8 @@
       });
   }
 
-  function isCourseWeekSessionClosed(classId, course, weekNumber) {
-    var sessions = sessionsForCourseWeek(classId, course, weekNumber);
+  function isCourseWeekSessionClosed(classId, course, weekNumber, sessionKind) {
+    var sessions = sessionsForCourseWeek(classId, course, weekNumber, sessionKind || "lecture");
     var i;
     for (i = 0; i < sessions.length; i++) {
       if (sessions[i].closedAt) return true;
@@ -960,15 +1184,22 @@
   var LECTURER_SCAN_QUEUE = "lecturer";
 
   function postAttendancePayload(payload) {
+    var liveScan =
+      global.AttendifyScannerHud &&
+      AttendifyScannerHud.isLiveScanPage &&
+      AttendifyScannerHud.isLiveScanPage();
     return apiFetch("/api/attendance", {
       method: "POST",
-      body: withLecturer(payload)
+      body: withLecturer(payload),
+      skipAuthRedirect: liveScan,
+      silentAuth: liveScan
     })
       .then(function (response) {
         return response.json();
       })
       .then(function (result) {
         if (result.state) applyState(result.state);
+        if (result.student) mergeStudentIntoCache(result.student);
         return result;
       });
   }
@@ -995,10 +1226,12 @@
     else if (index) payload.index = index;
 
     var student = findStudentForScan(scannerClassId, index, qrToken);
+    var scanLecture = lectureNameForScan(lectureName != null ? lectureName : payload.lectureName);
     var local = student
-      ? appendLocalAttendanceRecord(scannerClassId, payload.lectureName, week, activeCourseId, student)
+      ? appendLocalAttendanceRecord(scannerClassId, scanLecture, week, activeCourseId, student)
       : null;
     if (local && local.ok) {
+      mergeStudentIntoCache(student);
       var sync = function () {
         return postAttendancePayload(payload).catch(function () {
           if (global.AttendifyScanCache) AttendifyScanCache.enqueue(LECTURER_SCAN_QUEUE, payload);
@@ -1020,8 +1253,11 @@
   }
 
   if (typeof window !== "undefined") {
+    window.addEventListener("offline", function () {
+      markNetworkDegraded(true);
+    });
     window.addEventListener("online", function () {
-      flushPendingAttendanceScans();
+      softReconnect();
     });
   }
 
@@ -1031,9 +1267,16 @@
     if (!session) return [];
     return session.records.map(function (record) {
       var student = state.students.filter(function (item) { return item.id === record.studentId; })[0];
-      if (!student) return null;
+      if (!student) {
+        student = {
+          id: record.studentId,
+          classId: classId,
+          name: "Student",
+          index: String(record.studentId || "")
+        };
+      }
       return { student: student, scannedAt: record.scannedAt };
-    }).filter(Boolean);
+    });
   }
 
   function publicShareOrigin(hostInfo) {
@@ -1098,19 +1341,9 @@
     label = label.trim() || "this programme";
     var lvl = level != null && level !== "" ? Number(level) : null;
     if (lvl != null && !isNaN(lvl)) {
-      return (
-        "Students at Level " +
-        lvl +
-        " on " +
-        label +
-        " open this link once to join the programme roster (one QR for attendance in all your classes)."
-      );
+      return "Level " + lvl + " · " + label;
     }
-    return (
-      "Students on " +
-      label +
-      " open this link once to join the programme roster (one QR for attendance in all your classes)."
-    );
+    return label;
   }
 
   function scanShareUrl(token) {
@@ -1342,11 +1575,99 @@
     drawQr(element, text, downloadLink, filename || "attendify-scanner-link.png", ATTENDIFY_BRAND_LOGO, opts);
   }
 
+  function buildAttendanceCardPng(qrCanvas, opts) {
+    if (!qrCanvas) return null;
+    opts = opts || {};
+    var scale = opts.exportScale != null ? opts.exportScale : 2;
+    var qrSize = qrCanvas.width;
+    var pad = Math.round(12 * scale);
+    var gap = Math.round(5 * scale);
+    var name = String(opts.studentName || "").trim();
+    var index = String(opts.studentIndex || "").trim();
+    var nameH = name ? Math.round(14 * scale) : 0;
+    var indexH = index ? Math.round(12 * scale) : 0;
+    var headerH = (name ? nameH + gap : 0) + (index ? indexH + gap : 0);
+    var qrPx = Math.round(qrSize * scale);
+    var w = qrPx + pad * 2;
+    var footer = Math.round(10 * scale);
+    var h = pad + headerH + qrPx + pad + footer;
+    var card = document.createElement("canvas");
+    card.width = w;
+    card.height = h;
+    var ctx = card.getContext("2d");
+    if (!ctx) return qrCanvas;
+    roundRectPath(ctx, 0, 0, w, h, Math.round(14 * scale));
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = Math.max(1, scale);
+    roundRectPath(ctx, 0.5, 0.5, w - 1, h - 1, Math.round(14 * scale));
+    ctx.stroke();
+    ctx.fillStyle = "#f8fafc";
+    roundRectPath(ctx, 1, 1, w - 2, Math.round(36 * scale), Math.round(12 * scale));
+    ctx.fill();
+    var y = pad;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    if (name) {
+      ctx.fillStyle = "#0f172a";
+      ctx.font = "800 " + Math.round(12 * scale) + "px system-ui,sans-serif";
+      ctx.fillText(name.length > 28 ? name.slice(0, 26) + "…" : name, w / 2, y + Math.round(11 * scale));
+      y += nameH + gap;
+    }
+    if (index) {
+      ctx.fillStyle = "#64748b";
+      ctx.font = "600 " + Math.round(10 * scale) + "px ui-monospace,monospace";
+      ctx.fillText(index, w / 2, y + Math.round(9 * scale));
+      y += indexH + gap;
+    }
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(qrCanvas, pad, y, qrPx, qrPx);
+    ctx.fillStyle = "#0d9488";
+    ctx.font = "800 " + Math.round(8 * scale) + "px system-ui,sans-serif";
+    ctx.fillText("Attendify", w / 2, h - Math.round(6 * scale));
+    return card;
+  }
+
+  function mountAttendanceCardShell(element, holder, opts, downloadLink) {
+    var card = document.createElement("div");
+    card.className = "attendify-qr-card";
+    if (!opts.hideCardMeta && (opts.studentName || opts.studentIndex)) {
+      var meta = document.createElement("div");
+      meta.className = "attendify-qr-card__meta";
+      if (opts.studentName) {
+        var nameEl = document.createElement("p");
+        nameEl.className = "attendify-qr-card__name";
+        nameEl.textContent = opts.studentName;
+        meta.appendChild(nameEl);
+      }
+      if (opts.studentIndex) {
+        var idxEl = document.createElement("p");
+        idxEl.className = "attendify-qr-card__index";
+        idxEl.textContent = opts.studentIndex;
+        meta.appendChild(idxEl);
+      }
+      card.appendChild(meta);
+    }
+    var qrSlot = document.createElement("div");
+    qrSlot.className = "attendify-qr-card__qr";
+    qrSlot.appendChild(holder);
+    card.appendChild(qrSlot);
+    if (downloadLink) {
+      downloadLink.classList.add("attendify-qr-card__download");
+      if (!downloadLink.getAttribute("href")) downloadLink.setAttribute("href", "#");
+      card.appendChild(downloadLink);
+    }
+    element.innerHTML = "";
+    element.appendChild(card);
+  }
+
   function drawQr(element, text, downloadLink, filename, photoUrl, opts) {
     if (!element) return;
     opts = opts || {};
-    var size = opts.size || 224;
-    var avatar = opts.avatar != null ? opts.avatar : 50;
+    var attendanceCard = !!opts.attendanceCard;
+    var size = opts.size || (attendanceCard ? 192 : 224);
+    var avatar = opts.avatar != null ? opts.avatar : attendanceCard ? 44 : 50;
     var roundLogo = !!opts.roundLogo;
     var rawPhoto = String(photoUrl || "").trim();
     if (rawPhoto.indexOf("cdn.ucc.edu.gh") !== -1) {
@@ -1356,20 +1677,30 @@
     }
     photoUrl = rawPhoto;
 
+    var cardParent = element.closest && element.closest(".attendify-qr-card");
+    var useCardShell = attendanceCard && !cardParent;
+
     element.innerHTML = "";
     element.classList.add("attendify-qr-host");
+
+    var correctLevel =
+      photoUrl || attendanceCard
+        ? QRCode.CorrectLevel.H
+        : QRCode.CorrectLevel.M;
 
     new QRCode(element, {
       text: text,
       width: size,
       height: size,
-      correctLevel: photoUrl ? QRCode.CorrectLevel.H : QRCode.CorrectLevel.M
+      correctLevel: correctLevel
     });
 
     function setDownloadFromCanvas(canvas) {
       if (!downloadLink || !canvas) return;
       try {
-        downloadLink.href = canvas.toDataURL("image/png");
+        var exportCanvas = attendanceCard ? buildAttendanceCardPng(canvas, opts) : canvas;
+        if (!exportCanvas) exportCanvas = canvas;
+        downloadLink.href = exportCanvas.toDataURL("image/png");
         downloadLink.download = filename;
       } catch (e) {
         /* canvas may be tainted if CDN blocks CORS */
@@ -1440,8 +1771,16 @@
         holder.style.height = size + "px";
         holder.appendChild(composite);
         if (!painted) addCenterOverlay(holder);
-        element.innerHTML = "";
-        element.appendChild(holder);
+        if (useCardShell) {
+          mountAttendanceCardShell(element, holder, opts, downloadLink);
+        } else if (cardParent && downloadLink) {
+          element.innerHTML = "";
+          element.appendChild(holder);
+          if (!cardParent.contains(downloadLink)) cardParent.appendChild(downloadLink);
+        } else {
+          element.innerHTML = "";
+          element.appendChild(holder);
+        }
         setDownloadFromCanvas(painted ? composite : sourceCanvas);
       });
     }
@@ -1449,7 +1788,26 @@
     function finishQrRender(canvas, img) {
       if (canvas) {
         if (photoUrl) renderComposite(canvas);
-        else setDownloadFromCanvas(canvas);
+        else {
+          if (attendanceCard && useCardShell) {
+            var holderPlain = document.createElement("div");
+            holderPlain.className = "attendify-qr-wrap";
+            holderPlain.style.width = size + "px";
+            holderPlain.style.height = size + "px";
+            canvas.className = "attendify-qr-canvas";
+            holderPlain.appendChild(canvas);
+            mountAttendanceCardShell(element, holderPlain, opts, downloadLink);
+          } else if (cardParent) {
+            element.innerHTML = "";
+            var wrap = document.createElement("div");
+            wrap.className = "attendify-qr-wrap";
+            wrap.style.width = size + "px";
+            wrap.style.height = size + "px";
+            wrap.appendChild(canvas);
+            element.appendChild(wrap);
+          }
+          setDownloadFromCanvas(canvas);
+        }
         return;
       }
       if (img && photoUrl) {
@@ -1818,6 +2176,8 @@
 
   function requireLecturerSession() {
     var session = getSession();
+    if (session && session.lecturer && session.token) return session;
+    if (global.navigator && global.navigator.onLine === false) return session || null;
     if (!session || !session.lecturer || !session.token) {
       clearSession();
       window.location.replace(loginRedirectUrl());
@@ -1826,12 +2186,26 @@
     return session;
   }
 
-  function validateSession() {
-    return fetch(apiUrl("/api/auth/me"), {
-      method: "GET",
-      headers: authHeaders(),
-      credentials: "same-origin"
-    })
+  function validateSession(options) {
+    options = options || {};
+    var local = getSession();
+    if (global.navigator && global.navigator.onLine === false && local && local.token) {
+      return Promise.resolve({
+        ok: true,
+        offline: true,
+        lecturer: local.lecturer,
+        token: local.token
+      });
+    }
+    return fetchWithTimeout(
+      apiUrl("/api/auth/me"),
+      {
+        method: "GET",
+        headers: authHeaders(),
+        credentials: "same-origin"
+      },
+      options.timeoutMs || API_TIMEOUT_MS
+    )
       .then(function (response) {
         return response.json().then(function (body) {
           return { status: response.status, body: body };
@@ -1839,20 +2213,41 @@
       })
       .then(function (pack) {
         if (!pack.body || !pack.body.ok) {
-          clearSession();
-          return { ok: false, code: "AUTH_REQUIRED", error: (pack.body && pack.body.error) || "Please sign in." };
+          if (pack.status === 401) markNetworkDegraded(true);
+          if (local && local.token && local.lecturer) {
+            return {
+              ok: true,
+              offline: true,
+              stale: pack.status === 401,
+              lecturer: local.lecturer,
+              token: local.token
+            };
+          }
+          return {
+            ok: false,
+            code: pack.status === 401 ? "AUTH_REQUIRED" : "AUTH_CHECK_FAILED",
+            error: (pack.body && pack.body.error) || "Please sign in."
+          };
         }
-        var session = getSession() || {};
+        markNetworkDegraded(false);
+        var session = local || {};
         session.lecturer = pack.body.lecturer || session.lecturer;
         if (pack.body.programmeIds) session.programmeIds = pack.body.programmeIds;
         if (pack.body.expiresAt) session.expiresAt = pack.body.expiresAt;
         if (pack.body.token) session.token = pack.body.token;
         session.loggedInAt = session.loggedInAt || new Date().toISOString();
         saveSession(session);
+        if (pack.body.lecturer && pack.body.lecturer.photo) {
+          delete avatarPhotoCache[String(pack.body.lecturer.photo)];
+        }
         return pack.body;
       })
       .catch(function () {
-        return { ok: false, error: connectionHint() };
+        markNetworkDegraded(true);
+        if (local && local.token && local.lecturer) {
+          return { ok: true, offline: true, lecturer: local.lecturer, token: local.token };
+        }
+        return { ok: false, error: connectionHint(), code: "NETWORK" };
       });
   }
 
@@ -2062,10 +2457,16 @@
       .then(function (result) {
         if (result.ok && result.lecturer) {
           var session = getSession() || {};
+          var prevPhoto = session.lecturer && session.lecturer.photo ? String(session.lecturer.photo) : "";
           session.lecturer = result.lecturer;
           if (result.programmeIds) session.programmeIds = result.programmeIds;
           if (result.state) applyState(result.state);
           saveSession(session);
+          if (prevPhoto && prevPhoto !== String(result.lecturer.photo || "")) {
+            delete avatarPhotoCache[prevPhoto];
+          }
+          if (result.lecturer.photo) delete avatarPhotoCache[String(result.lecturer.photo)];
+          paintLecturerChrome(result.lecturer, { sidebar: true, header: true });
         }
         return result;
       })
@@ -2078,6 +2479,9 @@
     load: load,
     ready: ready,
     syncFromServer: syncFromServer,
+    softReconnect: softReconnect,
+    isNetworkDegraded: isNetworkDegraded,
+    pendingScanCount: pendingScanCount,
     connectionHint: connectionHint,
     classById: classById,
     studentsFor: studentsFor,
@@ -2103,6 +2507,11 @@
     setActiveCourseId: setActiveCourseId,
     getActiveCourseId: getActiveCourseId,
     courseLectureLabel: courseLectureLabel,
+    normalizeSessionKind: normalizeSessionKind,
+    sessionKindFromLectureName: sessionKindFromLectureName,
+    courseLectureNameForKind: courseLectureNameForKind,
+    parseReportWeekFilter: parseReportWeekFilter,
+    reportWeekFilterLabel: reportWeekFilterLabel,
     coursesForProgramme: coursesForProgramme,
     courseById: courseById,
     findSessionForCourseWeek: findSessionForCourseWeek,
@@ -2110,6 +2519,7 @@
     updateProgrammeCourse: updateProgrammeCourse,
     deleteProgrammeCourse: deleteProgrammeCourse,
     attendanceRows: attendanceRows,
+    mergeStudentIntoCache: mergeStudentIntoCache,
     enrollUrl: enrollUrl,
     enrollShareSummary: enrollShareSummary,
     fetchEnrollContext: fetchEnrollContext,

@@ -38,6 +38,9 @@ function renderLive() {
 }
 
 function handleScanResult(result) {
+  if (result && result.ok && result.student && Attendify.mergeStudentIntoCache) {
+    Attendify.mergeStudentIntoCache(result.student);
+  }
   if (!result.ok) {
     if (
       window.AttendifyScannerHud &&
@@ -206,12 +209,9 @@ function startCamera() {
 function syncFacingUi() {
   var Hud = window.AttendifyScannerHud;
   if (!Hud) return;
-  Hud.updateCameraFacingBadge(document.getElementById("scan-camera-facing-badge"), cameraFacing);
-  Hud.setFacingButtonStates(
-    document.getElementById("btn-camera-front"),
-    document.getElementById("btn-camera-back"),
-    cameraFacing
-  );
+  if (Hud.setFacingButtonStates) {
+    Hud.setFacingButtonStates(null, null, cameraFacing);
+  }
 }
 
 function applyCameraFacing(next) {
@@ -231,8 +231,13 @@ function applyCameraFacing(next) {
 }
 
 function flipCamera() {
+  var shell = document.getElementById("scan-camera-shell");
+  if (shell && shell.classList.contains("hidden")) {
+    launchScannerCamera();
+    return;
+  }
   if (!scanner && !cameraStarting) {
-    startCamera();
+    launchScannerCamera();
     return;
   }
   applyCameraFacing(cameraFacing === "environment" ? "user" : "environment");
@@ -240,20 +245,23 @@ function flipCamera() {
 
 function openScannerCameraAfterLayout() {
   var Hud = window.AttendifyScannerHud;
+  if (Hud && Hud.prepareManualFirstScan) Hud.prepareManualFirstScan();
+  stopCamera();
+}
+
+function launchScannerCamera() {
+  var Hud = window.AttendifyScannerHud;
+  if (Hud && Hud.setScanCameraExpanded) Hud.setScanCameraExpanded(true);
   stopCamera().then(function () {
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         function runStart() {
-          if (Hud && Hud.prefersTapToStartCamera && Hud.prefersTapToStartCamera()) {
-            hudScanMessage("Tap ↻ to start the camera.", "info", false);
-            return;
-          }
           startCamera();
         }
         if (Hud && Hud.whenHtml5QrcodeReady) {
           Hud.whenHtml5QrcodeReady(function (ok) {
             if (!ok) {
-              hudScanMessage("Scanner is still loading. Tap ↻ to start the camera.", "warning", false);
+              hudScanMessage("Scanner is still loading. Tap Open camera again.", "warning", false);
               return;
             }
             setTimeout(runStart, 80);
@@ -296,6 +304,7 @@ function openScannerModal(classId, lectureName, options) {
   var shareBtn = document.getElementById("btn-share-access");
   if (shareBtn) shareBtn.classList.remove("hidden");
   scannerModal.classList.remove("hidden");
+  if (AttendifyScannerHud.beginLiveScanSession) AttendifyScannerHud.beginLiveScanSession();
   AttendifyScannerHud.hideVerified();
   renderLive();
   openScannerCameraAfterLayout();
@@ -463,6 +472,12 @@ function closeStartAttendanceModal() {
 
 function closeScannerModal() {
   stopCamera();
+  if (window.AttendifyScannerHud && AttendifyScannerHud.prepareManualFirstScan) {
+    AttendifyScannerHud.prepareManualFirstScan();
+  }
+  if (window.AttendifyScannerHud && AttendifyScannerHud.endLiveScanSession) {
+    AttendifyScannerHud.endLiveScanSession();
+  }
   scannerModal.classList.add("hidden");
   persistLiveScanFromDashboard();
 }
@@ -487,6 +502,8 @@ document.getElementById("start-attendance-form").addEventListener("submit", func
   event.preventDefault();
   var courseId = document.getElementById("start-attendance-course").value;
   var week = Number(document.getElementById("start-attendance-week").value) || Attendify.semesterInfo().currentWeek || 1;
+  var sessionKindInput = document.querySelector('input[name="start-session-kind"]:checked');
+  var sessionKind = sessionKindInput ? sessionKindInput.value : "lecture";
   var err = document.getElementById("start-attendance-error");
   var course = Attendify.courseById(courseId);
   if (!courseId || !course) {
@@ -494,8 +511,13 @@ document.getElementById("start-attendance-form").addEventListener("submit", func
     err.classList.remove("hidden");
     return;
   }
-  if (Attendify.isCourseWeekSessionClosed && Attendify.isCourseWeekSessionClosed(modalProgrammeId(), course, week)) {
-    err.textContent = "Attendance for Week " + week + " has already ended for this course.";
+  if (
+    Attendify.isCourseWeekSessionClosed &&
+    Attendify.isCourseWeekSessionClosed(modalProgrammeId(), course, week, sessionKind)
+  ) {
+    err.textContent =
+      "Attendance for " + Attendify.reportWeekFilterLabel(week + (sessionKind !== "lecture" ? ":" + sessionKind : "")) +
+      " has already ended for this course.";
     err.classList.remove("hidden");
     return;
   }
@@ -503,7 +525,11 @@ document.getElementById("start-attendance-form").addEventListener("submit", func
   var modal = document.getElementById("startAttendanceModal");
   var programmeId = modal.dataset.programmeId || defaultClassId();
   var teachLevel = modal.dataset.teachLevel || "";
-  Attendify.startAttendanceSession(programmeId, null, { courseId: courseId, weekNumber: week }).then(function (result) {
+  Attendify.startAttendanceSession(programmeId, null, {
+    courseId: courseId,
+    weekNumber: week,
+    sessionKind: sessionKind
+  }).then(function (result) {
     if (!result.ok) {
       err.textContent =
         result.message ||
@@ -713,10 +739,9 @@ if (viewRosterBtn) {
   });
 }
 document.getElementById("btn-scan-flip").addEventListener("click", flipCamera);
-var dashCamBack = document.getElementById("btn-camera-back");
-var dashCamFront = document.getElementById("btn-camera-front");
-if (dashCamBack) dashCamBack.addEventListener("click", function () { applyCameraFacing("environment"); });
-if (dashCamFront) dashCamFront.addEventListener("click", function () { applyCameraFacing("user"); });
+if (window.AttendifyScannerHud && AttendifyScannerHud.bindOpenCameraButton) {
+  AttendifyScannerHud.bindOpenCameraButton("btn-open-camera", launchScannerCamera);
+}
 syncFacingUi();
 
 document.addEventListener("keydown", function (event) {
@@ -1061,7 +1086,11 @@ function promptCreateFirstCourse(classId) {
   }, 450);
 }
 
-Attendify.ready().then(function () {
+Attendify.ready()
+  .then(function () {
+    return Attendify.validateSession({ soft: true });
+  })
+  .then(function () {
   var session = Attendify.requireLecturerSession();
   if (!session) return;
   applyLecturerChrome(session);
@@ -1079,20 +1108,20 @@ Attendify.ready().then(function () {
   var dashSyncTick = 0;
   setInterval(function () {
     if (document.hidden) return;
-    dashSyncTick += 1;
-    var scanning = scannerModal && !scannerModal.classList.contains("hidden");
-    if (scanning) {
-      if (dashSyncTick % 2 !== 0) return;
-      Attendify.syncFromServer().then(function () {
-        renderLive();
-      });
-      return;
+    if (Attendify.isNetworkDegraded && Attendify.isNetworkDegraded()) {
+      dashSyncTick += 1;
+      if (dashSyncTick % 8 !== 0) return;
+    } else {
+      dashSyncTick += 1;
     }
-    if (dashSyncTick % 5 !== 0) return;
+    var scanning = scannerModal && !scannerModal.classList.contains("hidden");
+    var cadence = Attendify.isNetworkDegraded && Attendify.isNetworkDegraded() ? 6 : scanning ? 2 : 5;
+    if (dashSyncTick % cadence !== 0) return;
     Attendify.syncFromServer().then(function () {
-      renderDashboard();
+      if (scanning) renderLive();
+      else renderDashboard();
     });
-  }, 1000);
+  }, 3000);
 
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden && scannerModal && !scannerModal.classList.contains("hidden")) {
@@ -1102,6 +1131,7 @@ Attendify.ready().then(function () {
       });
     }
   });
+
   if (params.get("resumeScan") === "1" && Attendify.getLiveScanSession) {
     var live = Attendify.getLiveScanSession();
     if (live && Attendify.isLiveScanSessionStillOpen(live)) {
@@ -1115,7 +1145,8 @@ Attendify.ready().then(function () {
   } else if (params.get("scan") === "1") {
     openScannerModal(params.get("class") || defaultClassId());
   }
-});
+  })
+  .catch(function () {});
 
 window.addEventListener("attendify:programmes-updated", function () {
   Attendify.ready().then(renderDashboard);

@@ -71,9 +71,10 @@
       : (state.activeClassId || classes[0].id);
 
     selectedCourseId = initialCourse;
-    selectedWeek = initialWeek === "all" || (Number(initialWeek) >= 1 && Number(initialWeek) <= semesterWeekTotal())
-      ? initialWeek
-      : "all";
+    selectedWeek =
+      initialWeek === "all" || /^\d{1,2}(?::quiz[12])?$/i.test(String(initialWeek))
+        ? initialWeek
+        : "all";
 
     fillProgrammes();
     fillCourses();
@@ -145,43 +146,60 @@
       return String(s.courseId || "") === String(courseId || "");
     });
     if (weekFilter !== "all") {
-      var wNum = Number(weekFilter);
-      sessionList = sessionList.filter(function (s) {
-        return Number(s.weekNumber) === wNum;
-      });
+      var parsed = Attendify.parseReportWeekFilter(weekFilter);
+      if (parsed.mode === "week") {
+        sessionList = sessionList.filter(function (s) {
+          if (Number(s.weekNumber) !== parsed.weekNumber) return false;
+          return Attendify.sessionKindFromLectureName(s.lectureName) === parsed.sessionKind;
+        });
+      }
     }
     return sessionList;
   }
 
-  /** Weeks where roll call actually happened for this course (scan or session ended). Skipped weeks omitted. */
-  function weeksWithAttendanceTaken(sessionList) {
+  /** Roll-call slots (week + optional quiz) where attendance was taken or session ended. */
+  function rollCallSlotsFromSessions(sessionList) {
     var seen = {};
+    var slots = [];
     sessionList.forEach(function (sess) {
       var w = Number(sess.weekNumber);
       if (!w || w < 1) return;
       var hasRecords = (sess.records || []).length > 0;
       var ended = !!(sess.closedAt || sess.endedAt);
       if (!hasRecords && !ended) return;
-      seen[w] = true;
+      var kind = Attendify.sessionKindFromLectureName(sess.lectureName);
+      var key = w + ":" + kind;
+      if (seen[key]) return;
+      seen[key] = true;
+      slots.push({ weekNumber: w, sessionKind: kind });
     });
-    return Object.keys(seen)
-      .map(function (k) {
-        return Number(k);
-      })
-      .sort(function (a, b) {
-        return a - b;
-      });
+    var kindOrder = { lecture: 0, quiz1: 1, quiz2: 2 };
+    slots.sort(function (a, b) {
+      if (a.weekNumber !== b.weekNumber) return a.weekNumber - b.weekNumber;
+      return (kindOrder[a.sessionKind] || 0) - (kindOrder[b.sessionKind] || 0);
+    });
+    return slots;
   }
 
-  function buildWeekMarkBoxesHtml(studentId, weeksTaken, sessionList) {
-    if (!weeksTaken.length) return "";
-    return weeksTaken
-      .map(function (w) {
-        var hasScan = studentAttendedWeek(studentId, w, sessionList);
-        var title = "Week " + w + (hasScan ? ": Present" : ": Absent");
+  function slotTitle(slot, present) {
+    var label = Attendify.reportWeekFilterLabel(
+      slot.weekNumber + (slot.sessionKind !== "lecture" ? ":" + slot.sessionKind : "")
+    );
+    return label + (present ? ": Present" : ": Absent");
+  }
+
+  function buildWeekMarkBoxesHtml(studentId, slotsTaken, sessionList) {
+    if (!slotsTaken.length) return "";
+    return slotsTaken
+      .map(function (slot) {
+        var hasScan = studentAttendedSlot(studentId, slot, sessionList);
+        var title = slotTitle(slot, hasScan);
+        var isQuiz = slot.sessionKind === "quiz1" || slot.sessionKind === "quiz2";
         if (hasScan) {
           return (
-            '<span class="w-3 h-3.5 rounded-sm bg-emerald-500 inline-block shadow-sm" title="' +
+            '<span class="w-3 h-3.5 rounded-sm ' +
+            (isQuiz ? "bg-blue-500" : "bg-emerald-500") +
+            ' inline-block shadow-sm" title="' +
             esc(title) +
             '"></span>'
           );
@@ -195,18 +213,20 @@
       .join("");
   }
 
-  function studentAttendedWeek(studentId, weekNum, sessionList) {
+  function studentAttendedSlot(studentId, slot, sessionList) {
     return sessionList.some(function (sess) {
-      return Number(sess.weekNumber) === weekNum && (sess.records || []).some(function (r) {
+      if (Number(sess.weekNumber) !== slot.weekNumber) return false;
+      if (Attendify.sessionKindFromLectureName(sess.lectureName) !== slot.sessionKind) return false;
+      return (sess.records || []).some(function (r) {
         return r.studentId === studentId;
       });
     });
   }
 
-  function attendedWeekCount(studentId, weeksTaken, sessionList) {
+  function attendedSlotCount(studentId, slotsTaken, sessionList) {
     var count = 0;
-    weeksTaken.forEach(function (w) {
-      if (studentAttendedWeek(studentId, w, sessionList)) count += 1;
+    slotsTaken.forEach(function (slot) {
+      if (studentAttendedSlot(studentId, slot, sessionList)) count += 1;
     });
     return count;
   }
@@ -243,9 +263,18 @@
     if (!sel) return;
     var total = semesterWeekTotal();
     var html = '<option value="all">All Weeks (Aggregate)</option>';
-    for (var w = 1; w <= total; w++) {
-      var selected = String(w) === String(selectedWeek) ? " selected" : "";
-      html += '<option value="' + w + '"' + selected + '>Week ' + w + '</option>';
+    var w;
+    for (w = 1; w <= total; w++) {
+      var keys = [
+        { value: String(w), label: "Week " + w },
+        { value: w + ":quiz1", label: "Week " + w + " · Quiz 1" },
+        { value: w + ":quiz2", label: "Week " + w + " · Quiz 2" }
+      ];
+      var i;
+      for (i = 0; i < keys.length; i++) {
+        var selected = String(keys[i].value) === String(selectedWeek) ? " selected" : "";
+        html += '<option value="' + esc(keys[i].value) + '"' + selected + ">" + esc(keys[i].label) + "</option>";
+      }
     }
     sel.innerHTML = html;
   }
@@ -265,8 +294,14 @@
         return c.id === selectedCourseId;
       }) || null;
     var courseLabel = courseObj ? courseObj.code + " · " + courseObj.name : "Select a course";
-    var weekLabel = selectedWeek === "all" ? "All Weeks (aggregate)" : "Week " + selectedWeek;
+    var weekLabel =
+      selectedWeek === "all"
+        ? "All Weeks (aggregate)"
+        : Attendify.reportWeekFilterLabel
+          ? Attendify.reportWeekFilterLabel(selectedWeek)
+          : "Week " + selectedWeek;
     var isAggregate = selectedWeek === "all";
+    var weekParsed = isAggregate ? null : Attendify.parseReportWeekFilter(selectedWeek);
 
     syncTableHeader(isAggregate);
 
@@ -299,17 +334,24 @@
     var courseSessionsForAggregate = isAggregate
       ? sessionsForFilters(state, selectedClassId, selectedCourseId, "all")
       : sessionList;
-    var weeksTaken = isAggregate ? weeksWithAttendanceTaken(courseSessionsForAggregate) : [];
+    var weeksTaken = isAggregate ? rollCallSlotsFromSessions(courseSessionsForAggregate) : [];
     var weeksTakenCount = weeksTaken.length;
     var classWeeksLabel = weeksTakenCount + "/" + semesterWeeks;
-    var singleWeekNumber = Number(selectedWeek);
+    var singleWeekNumber = weekParsed && weekParsed.mode === "week" ? weekParsed.weekNumber : Number(selectedWeek);
+    var singleSessionKind =
+      weekParsed && weekParsed.mode === "week" ? weekParsed.sessionKind : "lecture";
     var singleWeekHasScans = sessionList.some(function (s) {
       return (s.records || []).length > 0;
     });
     var singleWeekClosed =
       !isAggregate &&
       courseObj &&
-      Attendify.isCourseWeekSessionClosed(selectedClassId, courseObj, singleWeekNumber);
+      Attendify.isCourseWeekSessionClosed(
+        selectedClassId,
+        courseObj,
+        singleWeekNumber,
+        singleSessionKind
+      );
     var singleWeekActive = !isAggregate && singleWeekHasScans && !singleWeekClosed;
 
     var scanMap = {};
@@ -333,7 +375,7 @@
       var miniBoxesHtml = "";
 
       if (isAggregate) {
-        attendedWeeks = attendedWeekCount(student.id, weeksTaken, courseSessionsForAggregate);
+        attendedWeeks = attendedSlotCount(student.id, weeksTaken, courseSessionsForAggregate);
         miniBoxesHtml = buildWeekMarkBoxesHtml(student.id, weeksTaken, courseSessionsForAggregate);
       }
 
@@ -348,7 +390,7 @@
         index: student.index,
         level: fmtLevel(student),
         course: courseLabel,
-        week: isAggregate ? classWeeksLabel : "Week " + selectedWeek,
+        week: isAggregate ? classWeeksLabel : weekLabel,
         present: isPresent,
         attendedWeeks: attendedWeeks,
         absentInTaken: absentInTaken,
@@ -492,7 +534,7 @@
         var lastCol;
         if (isAggregate) {
           statusBox = row.miniBoxesHtml
-            ? '<div class="flex items-center gap-0.5 flex-wrap" title="One box per roll-call week. Green present, red absent (skipped weeks not shown).">' +
+            ? '<div class="flex items-center gap-0.5 flex-wrap" title="One box per roll-call session. Green = class present, blue = quiz present, red = absent (skipped weeks not shown).">' +
               row.miniBoxesHtml +
               "</div>"
             : '<span class="text-slate-400 text-xs">…</span>';
@@ -669,7 +711,12 @@
               })
             : null;
         var courseLabel = courseObj ? courseObj.code + " · " + courseObj.name : "";
-        var weekLabel = selectedWeek === "all" ? "All weeks" : "Week " + selectedWeek;
+        var weekLabel =
+          selectedWeek === "all"
+            ? "All weeks"
+            : Attendify.reportWeekFilterLabel
+              ? Attendify.reportWeekFilterLabel(selectedWeek)
+              : "Week " + selectedWeek;
         Attendify.printAttendanceReport({
           title: "Attendance report, " + (programme ? programme.code : ""),
           subtitle: (programme ? programme.name + " · " : "") + courseLabel + " · " + weekLabel,

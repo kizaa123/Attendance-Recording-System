@@ -450,6 +450,9 @@
   }
 
   function handleScanResult(result) {
+    if (result && result.ok && result.student && Attendify.mergeStudentIntoCache) {
+      Attendify.mergeStudentIntoCache(result.student);
+    }
     if (!result.ok) {
       if (
         window.AttendifyScannerHud &&
@@ -640,12 +643,9 @@
   function syncFacingUi() {
     var Hud = window.AttendifyScannerHud;
     if (!Hud) return;
-    Hud.updateCameraFacingBadge(document.getElementById("scan-camera-facing-badge"), cameraFacing);
-    Hud.setFacingButtonStates(
-      document.getElementById("btn-camera-front"),
-      document.getElementById("btn-camera-back"),
-      cameraFacing
-    );
+    if (Hud.setFacingButtonStates) {
+      Hud.setFacingButtonStates(null, null, cameraFacing);
+    }
   }
 
   function applyCameraFacing(next) {
@@ -665,8 +665,13 @@
   }
 
   function flipCamera() {
+    var shell = document.getElementById("scan-camera-shell");
+    if (shell && shell.classList.contains("hidden")) {
+      launchScannerCamera();
+      return;
+    }
     if (!scanner && !cameraStarting) {
-      startCamera();
+      launchScannerCamera();
       return;
     }
     applyCameraFacing(cameraFacing === "environment" ? "user" : "environment");
@@ -674,20 +679,23 @@
 
   function openScannerCameraAfterLayout() {
     var Hud = window.AttendifyScannerHud;
+    if (Hud && Hud.prepareManualFirstScan) Hud.prepareManualFirstScan();
+    stopCamera();
+  }
+
+  function launchScannerCamera() {
+    var Hud = window.AttendifyScannerHud;
+    if (Hud && Hud.setScanCameraExpanded) Hud.setScanCameraExpanded(true);
     stopCamera().then(function () {
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
           function runStart() {
-            if (Hud && Hud.prefersTapToStartCamera && Hud.prefersTapToStartCamera()) {
-              hudScanMessage("Tap ↻ to start the camera.", "info", false);
-              return;
-            }
             startCamera();
           }
           if (Hud && Hud.whenHtml5QrcodeReady) {
             Hud.whenHtml5QrcodeReady(function (ok) {
               if (!ok) {
-                hudScanMessage("Scanner is still loading. Tap ↻ to start the camera.", "warning", false);
+                hudScanMessage("Scanner is still loading. Tap Open camera again.", "warning", false);
                 return;
               }
               setTimeout(runStart, 80);
@@ -790,6 +798,7 @@
     var shareBtn = document.getElementById("btn-share-access");
     if (shareBtn) shareBtn.classList.remove("hidden");
     scannerModal.classList.remove("hidden");
+    if (AttendifyScannerHud.beginLiveScanSession) AttendifyScannerHud.beginLiveScanSession();
     AttendifyScannerHud.hideVerified();
     renderTable();
     renderLive(selectedWeek);
@@ -807,6 +816,12 @@
 
   function closeScanner() {
     stopCamera();
+    if (window.AttendifyScannerHud && AttendifyScannerHud.prepareManualFirstScan) {
+      AttendifyScannerHud.prepareManualFirstScan();
+    }
+    if (window.AttendifyScannerHud && AttendifyScannerHud.endLiveScanSession) {
+      AttendifyScannerHud.endLiveScanSession();
+    }
     scannerModal.classList.add("hidden");
     persistLiveScanFromCourse(selectedWeek);
     Attendify.ready().then(function () {
@@ -840,16 +855,22 @@
   document.getElementById("take-attendance-form").addEventListener("submit", function (event) {
     event.preventDefault();
     var week = Number(document.getElementById("take-attendance-week").value) || selectedWeek;
+    var sessionKindInput = document.querySelector('input[name="take-session-kind"]:checked');
+    var sessionKind = sessionKindInput ? sessionKindInput.value : "lecture";
     var err = document.getElementById("take-attendance-error");
     err.classList.add("hidden");
-    if (isWeekClosed(week)) {
-      err.textContent = "Attendance for Week " + week + " has ended.";
+  var pair = programmeAndCourse();
+  if (pair && Attendify.isCourseWeekSessionClosed(programmeId, pair.course, week, sessionKind)) {
+      err.textContent =
+        "Attendance for " + Attendify.reportWeekFilterLabel(week + (sessionKind !== "lecture" ? ":" + sessionKind : "")) +
+        " has ended.";
       err.classList.remove("hidden");
       return;
     }
     Attendify.startAttendanceSession(programmeId, null, {
       courseId: courseId,
-      weekNumber: week
+      weekNumber: week,
+      sessionKind: sessionKind
     }).then(function (result) {
       if (!result.ok) {
         err.textContent =
@@ -961,10 +982,9 @@
     });
   }
   document.getElementById("btn-scan-flip").addEventListener("click", flipCamera);
-  var btnCamBack = document.getElementById("btn-camera-back");
-  var btnCamFront = document.getElementById("btn-camera-front");
-  if (btnCamBack) btnCamBack.addEventListener("click", function () { applyCameraFacing("environment"); });
-  if (btnCamFront) btnCamFront.addEventListener("click", function () { applyCameraFacing("user"); });
+  if (window.AttendifyScannerHud && AttendifyScannerHud.bindOpenCameraButton) {
+    AttendifyScannerHud.bindOpenCameraButton("btn-open-camera", launchScannerCamera);
+  }
   syncFacingUi();
 
   Attendify.ready().then(function () {
@@ -1018,16 +1038,13 @@
     var syncTick = 0;
     setInterval(function () {
       syncTick += 1;
+      var degraded = Attendify.isNetworkDegraded && Attendify.isNetworkDegraded();
       var scanning = isScannerOpen();
       var live = scanning || isLiveWeekSession();
-      if (scanning) {
-        if (syncTick % 2 !== 0) return;
-        refreshAttendanceFromServer();
-        return;
-      }
-      if (!live && syncTick % 5 !== 0) return;
+      var cadence = degraded ? 6 : scanning ? 2 : live ? 4 : 8;
+      if (syncTick % cadence !== 0) return;
       refreshAttendanceFromServer();
-    }, 1000);
+    }, 3000);
 
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden && (isScannerOpen() || isLiveWeekSession())) {

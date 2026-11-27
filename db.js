@@ -22,28 +22,19 @@ let db;
 
 function seedState() {
   return {
-    activeClassId: "bsc-cs",
-    classes: [
-      { id: "bsc-cs", code: "BSc CS", name: "BSc Computer Science", department: "Computer Science" },
-      { id: "bsc-it", code: "BSc IT", name: "BSc Information Technology", department: "Information Technology" }
-    ],
-    students: [
-      { id: "s1", classId: "bsc-cs", name: "Elena Rostova", index: "CS2024-0012", email: "e.rostova@student.ac.edu", photo: "", source: "lecturer" },
-      { id: "s2", classId: "bsc-cs", name: "Marcus Adebayo", index: "CS2024-0089", email: "m.adebayo@student.ac.edu", photo: "", source: "lecturer" },
-      { id: "s3", classId: "bsc-cs", name: "Julian Lawrence", index: "CS2024-0104", email: "j.lawrence@student.ac.edu", photo: "", source: "link" },
-      { id: "s4", classId: "bsc-cs", name: "Mei Ling Chen", index: "CS2024-0122", email: "m.chen@student.ac.edu", photo: "", source: "link" },
-      { id: "s5", classId: "bsc-cs", name: "Siddharth Kumar", index: "CS2024-0138", email: "s.kumar@student.ac.edu", photo: "", source: "lecturer" },
-      { id: "s6", classId: "bsc-cs", name: "Ananya Banerjee", index: "CS2024-0152", email: "a.banerjee@student.ac.edu", photo: "", source: "link" }
-    ],
+    activeClassId: "",
+    classes: [],
+    students: [],
     sessions: {},
-    semester: { totalWeeks: 15, currentWeek: 8 },
+    semester: { totalWeeks: 15, currentWeek: 1 },
     courses: []
   };
 }
 
 function maybeCopyLocalDbToPersistentDisk() {
+  if (!process.env.RENDER || process.env.ATTENDIFY_COPY_LOCAL_DB !== "1") return;
   const localDb = path.join(root, "data", "attendify.db");
-  if (dbFile === localDb || !process.env.RENDER) return;
+  if (dbFile === localDb) return;
   try {
     if (!fs.existsSync(dbFile) && fs.existsSync(localDb)) {
       fs.mkdirSync(path.dirname(dbFile), { recursive: true });
@@ -68,6 +59,7 @@ function openDb() {
   initSchema();
   migrateLegacyJsonIfNeeded();
   seedIfEmpty();
+  purgeBundledDemoRosterIfPresent();
   return db;
 }
 
@@ -463,6 +455,41 @@ function seedIfEmpty() {
   const classCount = db.prepare("SELECT COUNT(*) AS n FROM classes").get().n;
   if (classCount > 0) return;
   importState(seedState());
+}
+
+/** Remove old bundled localhost demo roster (safe: only known seed ids). */
+function purgeBundledDemoRosterIfPresent() {
+  if (setting("bundledDemoPurged", "") === "1") return;
+  const demoStudentIds = ["s1", "s2", "s3", "s4", "s5", "s6"];
+  const placeholders = demoStudentIds.map(function () {
+    return "?";
+  }).join(",");
+  const hit = db
+    .prepare("SELECT COUNT(*) AS n FROM students WHERE id IN (" + placeholders + ")")
+    .get(...demoStudentIds).n;
+  if (!hit) {
+    setSetting("bundledDemoPurged", "1");
+    return;
+  }
+  try {
+    db.exec("BEGIN");
+    db.prepare("DELETE FROM attendance_records WHERE student_id IN (" + placeholders + ")").run(...demoStudentIds);
+    db.prepare("DELETE FROM students WHERE id IN (" + placeholders + ")").run(...demoStudentIds);
+    ["bsc-cs", "bsc-it", "cs101", "cs210"].forEach(function (classId) {
+      const row = db.prepare("SELECT id FROM classes WHERE id = ?").get(classId);
+      if (!row) return;
+      const st = db.prepare("SELECT COUNT(*) AS n FROM students WHERE class_id = ?").get(classId).n;
+      const lp = db.prepare("SELECT COUNT(*) AS n FROM lecturer_programmes WHERE class_id = ?").get(classId).n;
+      const co = db.prepare("SELECT COUNT(*) AS n FROM programme_courses WHERE class_id = ?").get(classId).n;
+      if (!st && !lp && !co) db.prepare("DELETE FROM classes WHERE id = ?").run(classId);
+    });
+    db.exec("COMMIT");
+    setSetting("bundledDemoPurged", "1");
+    console.log("Removed bundled demo roster from database.");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    console.warn("Could not purge bundled demo roster:", error.message);
+  }
 }
 
 function migrateLegacyJsonIfNeeded() {
@@ -1113,6 +1140,21 @@ function lecturerPublic(row) {
   };
 }
 
+function pruneLecturerSessions(lecturerId, maxSessions) {
+  openDb();
+  const id = String(lecturerId || "");
+  if (!id) return;
+  const keep = Math.max(2, Number(maxSessions) || 10);
+  const rows = db
+    .prepare(
+      "SELECT token FROM lecturer_sessions WHERE lecturer_id = ? ORDER BY datetime(created_at) DESC"
+    )
+    .all(id);
+  for (let i = keep; i < rows.length; i++) {
+    db.prepare("DELETE FROM lecturer_sessions WHERE token = ?").run(rows[i].token);
+  }
+}
+
 function createLecturerSession(lecturerId, hours) {
   openDb();
   const token = crypto.randomBytes(32).toString("hex");
@@ -1122,6 +1164,7 @@ function createLecturerSession(lecturerId, hours) {
   db.prepare(
     "INSERT INTO lecturer_sessions (token, lecturer_id, created_at, expires_at) VALUES (?, ?, ?, ?)"
   ).run(token, lecturerId, createdAt, expires);
+  pruneLecturerSessions(lecturerId, 10);
   return { token: token, expiresAt: expires };
 }
 
@@ -1173,12 +1216,15 @@ function validateLecturerSession(token) {
     }
     lecturer = lecturerPublic(lec);
   }
+  const slideHours = 12;
+  const refreshed = new Date(Date.now() + slideHours * 60 * 60 * 1000).toISOString();
+  db.prepare("UPDATE lecturer_sessions SET expires_at = ? WHERE token = ?").run(refreshed, t);
   return {
     ok: true,
     token: row.token,
     lecturer: lecturer,
     lecturerId: row.lecturerId,
-    expiresAt: row.expiresAt
+    expiresAt: refreshed
   };
 }
 
@@ -1512,7 +1558,6 @@ function loginLecturer(input) {
     classId = programmeIds[0] || "";
   }
   if (classId) setSetting("activeClassId", classId);
-  destroyLecturerSessionsForUser(row.id);
   const session = createLecturerSession(row.id);
 
   return {
@@ -1915,6 +1960,16 @@ function resolveLectureForSession(input) {
       ? Number(input.weekNumber)
       : Number(setting("semester.currentWeek", "1")) || 1;
 
+  const rawKind = String((input && input.sessionKind) || (input && input.quizSlot) || "lecture")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (rawKind === "quiz1" || rawKind === "quiz-1") {
+    lectureName = lectureName + " · Quiz 1";
+  } else if (rawKind === "quiz2" || rawKind === "quiz-2") {
+    lectureName = lectureName + " · Quiz 2";
+  }
+
   return { ok: true, lectureName: lectureName, weekNumber: weekNumber, courseId: resolvedCourseId };
 }
 
@@ -2219,11 +2274,11 @@ function courseWeekSessionClosed(classId, lectureName, weekNumber, courseId) {
         `SELECT 1 AS hit
          FROM attendance_sessions s
          INNER JOIN attendance_session_classes l ON l.session_id = s.id
-         WHERE l.class_id = ? AND s.week_number = ? AND s.course_id = ?
+         WHERE l.class_id = ? AND s.week_number = ? AND s.course_id = ? AND s.lecture_name = ?
            AND s.closed_at IS NOT NULL AND trim(s.closed_at) != ''
          LIMIT 1`
       )
-      .get(classId, week, courseId);
+      .get(classId, week, courseId, lecture);
   } else {
     row = db
       .prepare(

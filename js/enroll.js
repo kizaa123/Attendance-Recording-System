@@ -269,7 +269,16 @@ function showEnrollQrSuccess(student, alreadyRegistered) {
     Attendify.qrText(student),
     document.getElementById("success-download"),
     student.index + "-attendance-card.png",
-    cardPhoto
+    cardPhoto,
+    {
+      attendanceCard: true,
+      size: 192,
+      avatar: 44,
+      exportScale: 2,
+      hideCardMeta: true,
+      studentName: student.name,
+      studentIndex: student.index
+    }
   );
   var success = document.getElementById("enroll-success");
   if (success && success.scrollIntoView) {
