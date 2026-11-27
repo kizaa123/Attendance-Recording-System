@@ -1575,11 +1575,11 @@
     drawQr(element, text, downloadLink, filename || "attendify-scanner-link.png", ATTENDIFY_BRAND_LOGO, opts);
   }
 
-  var ATTENDANCE_CARD_QR_RENDER = 124;
-  var ATTENDANCE_CARD_QR_PX = 120;
-  var ATTENDANCE_CARD_QR_PX_MOBILE = 100;
-  /** Downloaded PNG uses this QR size at 1× — no upscale (smaller file, pocket card). */
-  var ATTENDANCE_CARD_EXPORT_QR_PX = 108;
+  var ATTENDANCE_CARD_QR_RENDER = 138;
+  var ATTENDANCE_CARD_QR_PX = 130;
+  var ATTENDANCE_CARD_QR_PX_MOBILE = 118;
+  /** Downloaded PNG QR block (compact, not tiny; matches on-screen scale). */
+  var ATTENDANCE_CARD_EXPORT_QR_PX = 132;
   var ATTENDANCE_CARD_EXPORT_SCALE = 1;
 
   function attendanceCardDisplayPx(opts) {
@@ -1612,15 +1612,15 @@
         : opts.exportScale != null && Number(opts.exportScale) > 1
           ? Math.round(qrCanvas.width * Number(opts.exportScale))
           : ATTENDANCE_CARD_EXPORT_QR_PX;
-    var pad = 5;
+    var pad = 6;
     var gap = 3;
     var name = String(opts.studentName || "").trim();
     var index = String(opts.studentIndex || "").trim();
-    var nameH = name ? 12 : 0;
-    var indexH = index ? 10 : 0;
+    var nameH = name ? 13 : 0;
+    var indexH = index ? 11 : 0;
     var headerH = (name ? nameH + gap : 0) + (index ? indexH + gap : 0);
     var w = qrPx + pad * 2;
-    var footer = 6;
+    var footer = 7;
     var h = pad + headerH + qrPx + pad + footer;
     var card = document.createElement("canvas");
     card.width = w;
@@ -1644,21 +1644,21 @@
     ctx.textBaseline = "alphabetic";
     if (name) {
       ctx.fillStyle = "#0f172a";
-      ctx.font = "800 9px system-ui,sans-serif";
-      ctx.fillText(name.length > 26 ? name.slice(0, 24) + "…" : name, w / 2, y + 9);
+      ctx.font = "800 10px system-ui,sans-serif";
+      ctx.fillText(name.length > 26 ? name.slice(0, 24) + "…" : name, w / 2, y + 10);
       y += nameH + gap;
     }
     if (index) {
       ctx.fillStyle = "#64748b";
-      ctx.font = "600 8px ui-monospace,monospace";
-      ctx.fillText(index, w / 2, y + 8);
+      ctx.font = "600 9px ui-monospace,monospace";
+      ctx.fillText(index, w / 2, y + 9);
       y += indexH + gap;
     }
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(qrCanvas, 0, 0, qrCanvas.width, qrCanvas.height, pad, y, qrPx, qrPx);
     ctx.fillStyle = "#0d9488";
-    ctx.font = "800 6px system-ui,sans-serif";
-    ctx.fillText("Attendify", w / 2, h - 3);
+    ctx.font = "800 7px system-ui,sans-serif";
+    ctx.fillText("Attendify", w / 2, h - 4);
     return card;
   }
 
@@ -1704,10 +1704,13 @@
       ? Number(opts.renderSize) || ATTENDANCE_CARD_QR_RENDER
       : Number(opts.size) || 224;
     if (!attendanceCard && opts.size) size = Number(opts.size) || size;
-    var avatar = opts.avatar != null ? opts.avatar : attendanceCard ? 0 : 50;
+    var avatar =
+      opts.avatar != null ? opts.avatar : attendanceCard ? 34 : 50;
     var roundLogo = !!opts.roundLogo;
-    var plainAttendanceQr = attendanceCard && opts.qrCenterPhoto !== true;
-    var rawPhoto = plainAttendanceQr ? "" : String(photoUrl || "").trim();
+    var rawPhotoIn = String(photoUrl || "").trim();
+    var plainAttendanceQr =
+      attendanceCard && (opts.qrCenterPhoto === false || !rawPhotoIn);
+    var rawPhoto = plainAttendanceQr ? "" : rawPhotoIn;
     if (rawPhoto.indexOf("cdn.ucc.edu.gh") !== -1) {
       var tagMatch = rawPhoto.match(/[?&]tag=([^&]+)/i);
       var tag = tagMatch ? decodeURIComponent(tagMatch[1]) : "";

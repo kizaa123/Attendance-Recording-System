@@ -268,9 +268,11 @@ function showEnrollQrSuccess(student, alreadyRegistered) {
     Attendify.qrText(student),
     document.getElementById("success-download"),
     student.index + "-attendance-card.png",
-    null,
+    Attendify.qrCompositePhotoUrl(student),
     {
       attendanceCard: true,
+      roundLogo: true,
+      avatar: 34,
       hideCardMeta: false,
       studentName: student.name,
       studentIndex: student.index

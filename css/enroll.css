@@ -127,8 +127,8 @@
 }
 
 #success-qr .attendify-qr-wrap {
-  width: min(120px, 78vw) !important;
-  max-width: 78vw !important;
+  width: min(130px, 80vw) !important;
+  max-width: 80vw !important;
   height: auto !important;
 }
 
@@ -147,8 +147,16 @@
   }
 
   #success-qr .attendify-qr-wrap {
-    width: min(100px, 72vw) !important;
-    max-width: 72vw !important;
+    width: min(118px, 76vw) !important;
+    max-width: 76vw !important;
+  }
+
+  .attendify-qr-card .attendify-qr-avatar {
+    width: 34px;
+    height: 34px;
+    margin-left: -17px;
+    margin-top: -17px;
+    border-width: 2px;
   }
 
   #enroll-success #success-lead,
