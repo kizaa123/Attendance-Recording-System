@@ -126,11 +126,45 @@
   min-height: 0;
 }
 
-#success-qr .attendify-qr-wrap,
-#success-qr .attendify-qr-canvas {
-  width: 192px !important;
-  max-width: 192px !important;
+#success-qr .attendify-qr-wrap {
+  width: min(120px, 78vw) !important;
+  max-width: 78vw !important;
   height: auto !important;
+}
+
+#success-qr .attendify-qr-canvas,
+#success-qr .attendify-qr-wrap canvas {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+@media (max-width: 480px) {
+  .enroll-qr-card.attendify-qr-card {
+    max-width: min(11.25rem, 92vw);
+    margin-top: 0.65rem;
+    padding: 0.5rem 0.55rem 0.5rem;
+  }
+
+  #success-qr .attendify-qr-wrap {
+    width: min(100px, 72vw) !important;
+    max-width: 72vw !important;
+  }
+
+  #enroll-success #success-lead,
+  #enroll-success #success-index {
+    font-size: 0.7rem;
+  }
+
+  #ucc-photo-preview .avatar-slot,
+  #ucc-photo-preview .w-32 {
+    width: 5.75rem !important;
+    height: 5.75rem !important;
+  }
+
+  #ucc-photo-preview .ring-4 {
+    --tw-ring-width: 2px;
+  }
 }
 
 .attendify-qr-card .attendify-qr-avatar {

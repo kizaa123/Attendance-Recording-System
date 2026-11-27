@@ -263,19 +263,15 @@ function showEnrollQrSuccess(student, alreadyRegistered) {
       : "You are registered. Save this card for attendance.";
   }
 
-  var cardPhoto = Attendify.qrCompositePhotoUrl(student);
   Attendify.drawQr(
     document.getElementById("success-qr"),
     Attendify.qrText(student),
     document.getElementById("success-download"),
     student.index + "-attendance-card.png",
-    cardPhoto,
+    null,
     {
       attendanceCard: true,
-      size: 192,
-      avatar: 44,
-      exportScale: 2,
-      hideCardMeta: true,
+      hideCardMeta: false,
       studentName: student.name,
       studentIndex: student.index
     }
