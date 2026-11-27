@@ -198,8 +198,8 @@
     }
   </script>
   <script src="/js/scan-cache.js?v=1"></script>
-  <script src="/js/store.js?v=38"></script>
-  <script src="/js/scanner-hud.js?v=38"></script>
+  <script src="/js/store.js?v=51"></script>
+  <script src="/js/scanner-hud.js?v=39"></script>
   <script src="/js/mobile-app.js?v=3"></script>
   <script>
   (function () {
@@ -359,7 +359,13 @@
       document.getElementById("hdr-lecture").textContent = sessionCtx.lectureName || "Attendance Session";
       document.getElementById("hdr-programme").textContent =
         sessionCtx.programme ? sessionCtx.programme.code + " · " + sessionCtx.programme.name : "";
-      document.getElementById("hdr-week").textContent = "Week " + (sessionCtx.weekNumber || 1);
+      var weekLabel = "Week " + (sessionCtx.weekNumber || 1);
+      if (window.Attendify && Attendify.sessionKindFromLectureName) {
+        var sk = Attendify.sessionKindFromLectureName(sessionCtx.lectureName || "");
+        if (sk === "quiz1") weekLabel += " (Quiz1)";
+        else if (sk === "quiz2") weekLabel += " (Quiz2)";
+      }
+      document.getElementById("hdr-week").textContent = weekLabel;
 
       // Populate any already-scanned records (from before this TA joined)
       var existing = sessionCtx.records || [];
@@ -384,7 +390,7 @@
       flushTaScanQueue();
 
       if (navigator.onLine !== false) {
-        setInterval(pollSession, 2500);
+        setInterval(pollSession, 1200);
       } else {
         window.addEventListener("online", function () {
           flushTaScanQueue();
@@ -632,9 +638,32 @@
       renderManualRoster();
     }
 
+    function refreshScannedFromSession() {
+      if (!sessionCtx || !sessionCtx.records) return;
+      sessionCtx.records.forEach(function (rec) {
+        if (!scannedStudents.some(function (s) { return s.studentId === rec.studentId; })) {
+          scannedStudents.unshift({
+            studentId: rec.studentId,
+            name: rec.name,
+            index: rec.studentIndex,
+            photo: rec.photo || "",
+            scannedAt: rec.scannedAt
+          });
+        }
+      });
+    }
+
+    function studentAlreadyInSession(studentId) {
+      refreshScannedFromSession();
+      return scannedStudents.some(function (s) {
+        return s.studentId === studentId;
+      });
+    }
+
     function submitScan(text) {
       if (scanBusy) return Promise.resolve();
       scanBusy = true;
+      refreshScannedFromSession();
       var parseFn =
         typeof Attendify !== "undefined" && Attendify.parseQr ? Attendify.parseQr : parseQrText;
       var parsed = parseFn(text);
@@ -649,25 +678,24 @@
         return Promise.resolve();
       }
 
-      var isDup = scannedStudents.some(function (s) {
-        return s.studentId === student.id;
-      });
-      var scannedAt = new Date().toISOString();
-      var localResult = {
-        ok: true,
-        duplicate: isDup,
-        student: {
-          id: student.id,
-          name: student.name,
-          index: student.index,
-          photo: student.photo || ""
-        },
-        record: { studentId: student.id, scannedAt: scannedAt }
-      };
-      handleScanResult(localResult);
-
+      var isDup = studentAlreadyInSession(student.id);
       var payload = attendancePayload(parsed, text);
       if (isDup) {
+        var existing = scannedStudents.filter(function (s) { return s.studentId === student.id; })[0];
+        handleScanResult({
+          ok: true,
+          duplicate: true,
+          student: {
+            id: student.id,
+            name: student.name,
+            index: student.index,
+            photo: student.photo || ""
+          },
+          record: {
+            studentId: student.id,
+            scannedAt: (existing && existing.scannedAt) || new Date().toISOString()
+          }
+        });
         scanBusy = false;
         return Promise.resolve();
       }
@@ -682,9 +710,19 @@
       return postAttendance(payload)
         .then(function (result) {
           if (result && result.ok) {
-            if (result.record && result.record.scannedAt) {
-              mergeServerRecord(result);
+            if (sessionCtx && result.student && result.record) {
+              sessionCtx.records = sessionCtx.records || [];
+              if (!sessionCtx.records.some(function (r) { return r.studentId === result.student.id; })) {
+                sessionCtx.records.push({
+                  studentId: result.student.id,
+                  name: result.student.name,
+                  studentIndex: result.student.index,
+                  photo: result.student.photo || "",
+                  scannedAt: result.record.scannedAt
+                });
+              }
             }
+            handleScanResult(result);
             pollSession();
             return;
           }
@@ -752,6 +790,16 @@
         });
         renderRecent();
         renderManualRoster();
+      } else if (!scannedStudents.some(function (s) { return s.studentId === student.id; })) {
+        scannedStudents.unshift({
+          studentId: student.id,
+          name: student.name,
+          index: student.index,
+          photo: student.photo || "",
+          scannedAt: result.record.scannedAt
+        });
+        renderRecent();
+        renderManualRoster();
       }
     }
 
@@ -767,7 +815,10 @@
             }
             return;
           }
-          var remote = data.session.records || [];
+          if (data.session) {
+            sessionCtx.records = data.session.records || [];
+          }
+          var remote = sessionCtx.records || [];
           var updated = false;
           remote.forEach(function (rec) {
             if (!scannedStudents.some(function (s) { return s.studentId === rec.studentId; })) {

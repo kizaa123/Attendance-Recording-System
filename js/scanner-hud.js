@@ -374,6 +374,8 @@
     var busy = false;
     var boostCanvas = null;
     var boostCtx = null;
+    var boostPass = 0;
+    var missStreak = 0;
 
     function findVideo() {
       var host = document.getElementById(readerId);
@@ -537,17 +539,21 @@
 
     function detectPassChain(video) {
       return safeDetect(detector.detect(video)).then(function (codes) {
-        if (codes.length) return codes;
-        return global.Promise.all([
-          safeDetect(detectScreenQr(video)),
-          safeDetect(detectFarQr(video)),
-          safeDetect(detectScaled(video)),
-          safeDetect(detectHighContrast(video))
-        ]).then(function (batch) {
-          var merged = mergeCodes(batch);
-          if (merged.length) return merged;
-          return safeDetect(detectTinyCenter(video)).then(function (tiny) {
-            if (tiny.length) return tiny;
+        if (codes.length) {
+          missStreak = 0;
+          return codes;
+        }
+        missStreak += 1;
+        boostPass = (boostPass + 1) % 3;
+        var pass;
+        if (boostPass === 0) pass = safeDetect(detectScreenQr(video));
+        else if (boostPass === 1) pass = safeDetect(detectScaled(video));
+        else pass = safeDetect(detectHighContrast(video));
+        return pass.then(function (boosted) {
+          if (boosted.length) return boosted;
+          if (missStreak % 4 !== 0) return [];
+          return safeDetect(detectFarQr(video)).then(function (far) {
+            if (far.length) return far;
             return safeDetect(detectCenterZoom(video));
           });
         });

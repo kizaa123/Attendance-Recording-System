@@ -261,20 +261,28 @@
   function fillWeeks() {
     var sel = document.getElementById("report-week-select");
     if (!sel) return;
+    ensureCourseSelection();
     var total = semesterWeekTotal();
+    var state = Attendify.load();
+    var sessionList = selectedCourseId
+      ? sessionsForFilters(state, selectedClassId, selectedCourseId, "all")
+      : [];
+    var quizSlots = rollCallSlotsFromSessions(sessionList).filter(function (slot) {
+      return slot.sessionKind === "quiz1" || slot.sessionKind === "quiz2";
+    });
     var html = '<option value="all">All Weeks (Aggregate)</option>';
     var w;
     for (w = 1; w <= total; w++) {
-      var keys = [
-        { value: String(w), label: "Week " + w },
-        { value: w + ":quiz1", label: "Week " + w + " · Quiz 1" },
-        { value: w + ":quiz2", label: "Week " + w + " · Quiz 2" }
-      ];
-      var i;
-      for (i = 0; i < keys.length; i++) {
-        var selected = String(keys[i].value) === String(selectedWeek) ? " selected" : "";
-        html += '<option value="' + esc(keys[i].value) + '"' + selected + ">" + esc(keys[i].label) + "</option>";
-      }
+      var selected = String(w) === String(selectedWeek) ? " selected" : "";
+      html += '<option value="' + w + '"' + selected + ">Week " + w + "</option>";
+    }
+    var i;
+    for (i = 0; i < quizSlots.length; i++) {
+      var slot = quizSlots[i];
+      var val = slot.weekNumber + ":" + slot.sessionKind;
+      var label = Attendify.reportWeekFilterLabel(val);
+      selected = String(val) === String(selectedWeek) ? " selected" : "";
+      html += '<option value="' + esc(val) + '"' + selected + ">" + esc(label) + "</option>";
     }
     sel.innerHTML = html;
   }

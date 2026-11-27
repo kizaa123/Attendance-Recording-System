@@ -446,8 +446,8 @@
     var parsed = parseReportWeekFilter(filter);
     if (parsed.mode === "all") return "All Weeks (aggregate)";
     var label = "Week " + parsed.weekNumber;
-    if (parsed.sessionKind === "quiz1") return label + " · Quiz 1";
-    if (parsed.sessionKind === "quiz2") return label + " · Quiz 2";
+    if (parsed.sessionKind === "quiz1") return label + " (Quiz1)";
+    if (parsed.sessionKind === "quiz2") return label + " (Quiz2)";
     return label;
   }
 
@@ -1227,29 +1227,36 @@
 
     var student = findStudentForScan(scannerClassId, index, qrToken);
     var scanLecture = lectureNameForScan(lectureName != null ? lectureName : payload.lectureName);
-    var local = student
-      ? appendLocalAttendanceRecord(scannerClassId, scanLecture, week, activeCourseId, student)
-      : null;
-    if (local && local.ok) {
-      mergeStudentIntoCache(student);
-      var sync = function () {
-        return postAttendancePayload(payload).catch(function () {
-          if (global.AttendifyScanCache) AttendifyScanCache.enqueue(LECTURER_SCAN_QUEUE, payload);
-          return { ok: false, error: "queued" };
-        });
-      };
-      if (!navigator.onLine) {
-        if (global.AttendifyScanCache) AttendifyScanCache.enqueue(LECTURER_SCAN_QUEUE, payload);
-        return Promise.resolve(Object.assign({ queued: true }, local));
-      }
-      sync();
-      return Promise.resolve(local);
-    }
+    var scanKind = sessionKindFromLectureName(scanLecture);
+    if (scanKind !== "lecture") payload.sessionKind = scanKind;
 
-    return postAttendancePayload(payload).catch(function () {
+    function offlineOptimistic() {
+      if (!student) return { ok: false, error: "unknown" };
+      var local = appendLocalAttendanceRecord(scannerClassId, scanLecture, week, activeCourseId, student);
+      if (local && local.ok) {
+        mergeStudentIntoCache(student);
+        if (global.AttendifyScanCache) AttendifyScanCache.enqueue(LECTURER_SCAN_QUEUE, payload);
+        return Object.assign({ queued: true }, local);
+      }
       if (global.AttendifyScanCache) AttendifyScanCache.enqueue(LECTURER_SCAN_QUEUE, payload);
       return { ok: false, error: "unknown", queued: true };
-    });
+    }
+
+    if (global.navigator && global.navigator.onLine === false) {
+      return Promise.resolve(offlineOptimistic());
+    }
+
+    return postAttendancePayload(payload)
+      .then(function (result) {
+        if (result && result.student) mergeStudentIntoCache(result.student);
+        if (result && result.ok) return result;
+        var fallback = offlineOptimistic();
+        if (fallback && fallback.ok) return fallback;
+        return result || { ok: false, error: "unknown" };
+      })
+      .catch(function () {
+        return offlineOptimistic();
+      });
   }
 
   if (typeof window !== "undefined") {
